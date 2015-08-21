@@ -33,7 +33,7 @@ def save_event(f,ev):
     In: f, file name
         ev, events needs to be saved
     """
-     with open(f, "wb") as fid:
+    with open(f, "wb") as fid:
           pickle.dump(ev,fid)
 
 
@@ -70,7 +70,7 @@ main code of data processing and image patch extracting
 """
 #specify the directory of the cam5 data, land mask data file and output directoty, hard coded
 camdir="/global/project/projectdirs/m1248/suren_data/climate/cam5_tmq" #TMQ directory
-outdir="/global/project/projectdirs/mantissa/climate/Yunjie/ar_patch2/newest/"  #output directory 
+outdir="/global/project/projectdirs/mantissa/climate/Yunjie/ar_patch2/us_new_samesize/"  #output directory 
 landdir="/global/project/projectdirs/mantissa/climate/Yunjie"        # landmask directory
 
 #define global grid of CAM5.0 output
@@ -86,9 +86,9 @@ gI = np.arange(-90, 90 + dI, dI)  #lat
 gJ = np.arange(0, 360, dJ)   #lon
 
 #define bounding box
-# I-bot=19.0N,I-top=56.0N,J-left=-180.0W,J-right=-120.0W
-Ilow=19.0
-Itop=56.0
+# I-bot=19.0N,I-top=56.0N,J-left=-180.0W,J-right=-120.0W (will create 158x224 image)
+Ilow=20.0  
+Itop=54.75 #will create 148x224 image
 Jleft=180.0
 Jright=250.0  # convert to 0-360 scale
 
@@ -119,8 +119,8 @@ newdates1=[i[:-1] for i in dates1]
 print("total number of Non AR events are %d" %len(newdates1))
 
 #read in the raw data file
-for year in range(1980,2006):
-    for month in range(2,13):
+for year in range(1979,2006):
+    for month in range(1,13):
         """
         TODO: maybe use glob will make code more concise? 
         """

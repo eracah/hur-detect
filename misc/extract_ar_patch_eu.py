@@ -33,7 +33,7 @@ def save_event(f,ev):
     In: f, file name
         ev, events needs to be saved
     """
-     with open(f, "wb") as fid:
+    with open(f, "wb") as fid:
           pickle.dump(ev,fid)
 
 def  cut_box(d, timea,timeb):
@@ -65,7 +65,7 @@ main code of data processing and image patch extracting
 """
 #specify the directory of the ERA-interim data
 camdir="/global/project/projectdirs/mantissa/climate/ERA-Interim"
-outdir="/global/project/projectdirs/mantissa/climate/Yunjie/ar_patch2/eu_newest"
+outdir="/global/project/projectdirs/mantissa/climate/Yunjie/ar_patch2/eu_new_samesize/"
 nddir="/global/project/projectdirs/mantissa/climate/Yunjie"        # landmask directory
 
 #define global grid of ERA_interim output
@@ -81,11 +81,11 @@ gI = np.arange(-90, 90+dI, dI)  #lat  Note: in ERA-interim the lat is just oppos
 gJ = np.arange(0, 360, dJ)   #lon
 
 #define bounding box
-#I-bot=30.0N,I-top=70.0N,J-left=30.0W,J-right=25.0E
-Ilow=25.0
-Itop=60.0
+#I-bot=25.0N,I-top=60.0N,J-left=300.0W,J-right=0.0E (will create 140x240 image)
+Ilow=24.0
+Itop=61.0  #thi swill create image size(148x224)
 Jleft=0.0
-Jright=300.0  # convert to 0-360 scale, note later there value will ber wrapped 
+Jright=304.0  # convert to 0-360 scale, note later there value will ber wrapped 
 
 # define keys
 keys= ["TMQ","date"]#,"mask" 
@@ -97,7 +97,6 @@ lattop=I-nearestindex(Itop,gI)
 lonleft=nearestindex(Jleft,gJ)
 lonright=nearestindex(Jright,gJ)
 #lonbound=(lonleft,lonright)
-
 
 #read in the AR dates
 dfile=op.join(outdir,"AR_label_Jun29.txt")
