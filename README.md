@@ -2,7 +2,7 @@
 ###/global/project/projectdirs/nervana/yunjie/dataset###
 Uses symbolic link to refer the data is probably a better way than copying data around.  
 
-###localization task
+###Task 2: localization
 -------------------------------------------------------------------
 Data are in the "localization" sub folder
 
@@ -11,7 +11,7 @@ hurricanes_localization.h5 is contains hurricanes(~25000) and no hurricanes(~250
 Dimensions of images are 96x96. Diagnostic variables are TMQ, V850, PSL, U850, T500, UBOT, T200, VBOT. For each of the positive example, there is hurricane in the image but not centered.
 
 
-###classification task
+###Task 1: classification
 -------------------------------------------------------------------
 
 ###>>Fronts
