@@ -1,8 +1,16 @@
 #Data Set#
 ###/global/project/projectdirs/nervana/yunjie/dataset###
+Uses symbolic link to refer the data is probably a better way than copying data around.  
+
+###-------------------------------------------------------------------
+###classification task
+###-------------------------------------------------------------------
+
+###>>Fronts
+fronts_all.h5 contains fronts (5600) and no_fronts(28852) training data. Dimensions of images are 27x60. Diagnostic variables are Precipitation, pressure and temperature.
+
 ###>>Atmospheric River
 ####There are three subdirectories in this directory:old, new_landsea and new_merge   
-Uses symbolic link to refer the data is probably a better way than copying data around.  
 The reason why I think about to calculate the TMQ and TMQ_land intersection and store it as a diagnostic variables is that this may save time for recalculating the TMQ_land intersection each time run the model. Trim the images to same size and merge the Europe and America data together potentially increase training data size, which can be beneficial on preventing overfitting and aiding model to learn. The method of calculating TMQ and TMQ_land intersection is adopted from Joaquin's python code.
 
 ###old: 
