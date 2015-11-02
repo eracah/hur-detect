@@ -2,9 +2,9 @@
 ###/global/project/projectdirs/nervana/yunjie/dataset###
 Uses symbolic link to refer the data is probably a better way than copying data around.  
 
-###-------------------------------------------------------------------
+-------------------------------------------------------------------
 ###classification task
-###-------------------------------------------------------------------
+-------------------------------------------------------------------
 
 ###>>Fronts
 fronts_all.h5 contains fronts (5600) and no_fronts(28852) training data. Dimensions of images are 27x60. Diagnostic variables are Precipitation, pressure and temperature.
