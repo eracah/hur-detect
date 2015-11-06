@@ -7,7 +7,7 @@ Uses symbolic link to refer the data is probably a better way than copying data 
 Data are in the "localization" sub folder
 
 ###>> Hurricanes
-hurricanes_localization_loc.h5 contains hurricanes(~25000) and no hurricanes(~25000) training data.
+larger_hurricanes_loc.h5 contains hurricanes(~25000) and no hurricanes(~25000) training data.
 Dimensions of images are 96x96. Diagnostic variables are TMQ, V850, PSL, U850, T500, UBOT, T200, VBOT. For each positive example, there is hurricane in image but not centered. key "hurricane_box" contains bounding box (xmim,ymin,xmax,ymax) information of where the hurricane is in image.
 
 ###>> Fronts
