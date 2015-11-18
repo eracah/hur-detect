@@ -12,4 +12,5 @@ class HeWeightInit(Initializer):
         super(HeWeightInit, self).__init__(name=name)
 
     def fill(self, param):
-        param[:] = self.be.rng.normal(0.0, np.sqrt(2.0 / param.shape[0]))
+        print param.shape
+        param[:] = self.be.rng.normal(0.0, np.sqrt(2.0 / param.shape[0]), param.shape)
