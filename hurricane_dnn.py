@@ -13,6 +13,7 @@ from neon.callbacks.callbacks import Callbacks, LossCallback
 import os
 import h5py
 from matplotlib import pyplot as plt
+import pickle
 
 #TODO log on to edison and run
 # 01 is hur 10 is nhur
@@ -20,27 +21,43 @@ from matplotlib import pyplot as plt
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-args.batch_size = 1000
-args.eval_freq = 5
 
-num_epochs = 2 # args.epochs
+num_epochs = 1 # args.epochs
 final_dir = './results'
+model_files_dir = './model_files'
 
+dirs = [model_files_dir, final_dir]
+for dir in dirs:
+    if not os.path.exists(dir):
+        os.mkdir(dir)
 
-if not os.path.exists(final_dir):
-    os.mkdir(final_dir)
 path='/global/project/projectdirs/nervana/yunjie/dataset/localization/larger_hurricanes_loc.h5'
 path='./raw_data/smaller_hurricanes_loc.h5'
 path='./raw_data/expand_hurricanes_loc.h5'
 
 
+parser.set_defaults(batch_size=128,
+                    test=False,
+                    save_path=model_files_dir,
+                    h5file='/global/project/projectdirs/nervana/yunjie/dataset/localization/larger_hurricanes_loc.h5',
+                    serialize=2,
+                    epochs=100,
+                    progress_bar=True,
+                    datatype='f64',
+                    model_file=False,
+                    just_test=False,
+                    eval_freq=1)
 
+
+args.batch_size = 1000
+args.eval_freq = 5
+args.h5file ='./raw_data/expand_hurricanes_loc.h5'
 
 (X_train, y_train, tr_i), (X_test, y_test, te_i), (X_val, y_val, val_i), \
 nclass, \
 w_size, \
 cropped_ims, \
-boxes= load_hurricane(path=path)
+boxes= load_hurricane(path=args.h5file)
 rad = w_size / 2
 
 
@@ -53,7 +70,8 @@ opt_gdm = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
 
 relu = Rectlin()
 conv = dict(strides=1, init=w_init, bias=Constant(0), activation=Tanh())#, batch_norm=True)
-#mp =
+
+
 #13 layer architecure from Ciseran et al. Mitosis Paper adjusted to fit our window size
 # (they go from 101x101 as inout to 2x2 as output from last pooling layer), so we adjust to fit the output requirements
 layers_13 = [Conv((2, 2, 16), **conv),
@@ -101,13 +119,20 @@ callbacks.add_callback(LossCallback(h5fin.create_group('train_loss'), mlp, eval_
 callbacks.add_callback(LossCallback(h5fin.create_group('valid_loss'), mlp, eval_set=valid_set, epoch_freq=args.eval_freq))
 
 
-mlp.fit(train_set,optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+if args.model_file:
+    mlp.load_weights(args.model_file)
+else:
+    mlp.fit(train_set,optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+pickle.dump(mlp.serialize(), open(os.path.join(model_files_dir, '%s-%s.pkl'%(model_key, str(args.epochs))), 'w'))
+
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
 probs = mlp.get_outputs(valid_set)
 
 #probs will have shape (X_val.shape[0],2) number of example_images by the output vector of 2
 pos_probs = probs[:,1] #hust get second column which corresponds to prob of hurricane
 #probs.reshape to n_val_im by one input image channel shape so we can have prob map
+orig_val_im=cropped_ims[val_i[0]]
+boxes_te = boxes[val_i[0]]
 prob_map = pos_probs.reshape((orig_val_im.shape[0], orig_val_im.shape[2], orig_val_im.shape[3]))
 plt.imshow(prob_map[0], interpolation='none')
 
