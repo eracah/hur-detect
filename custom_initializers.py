@@ -1,6 +1,7 @@
 __author__ = 'racah'
 from neon.initializers.initializer import Initializer
 import numpy as np
+from operator import mul
 
 class HeWeightInit(Initializer):
     """ class for initializing parameter tensors with values
@@ -12,5 +13,17 @@ class HeWeightInit(Initializer):
         super(HeWeightInit, self).__init__(name=name)
 
     def fill(self, param):
-        print param.shape
+        #print param.shape
         param[:] = self.be.rng.normal(0.0, np.sqrt(2.0 / param.shape[0]), param.shape)
+
+
+class AveragingFilterInit(Initializer):
+    def __init__(self, name='AveragingFilterInit'):
+        super(AveragingFilterInit, self).__init__(name=name)
+
+    def fill(self, param):
+        print param.shape
+        size = reduce(mul, param.shape)
+        param[:] = 1./ size * np.ones(param.shape)
+
+
