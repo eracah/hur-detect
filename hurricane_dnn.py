@@ -12,6 +12,8 @@ from neon.models import Model
 from neon.callbacks.callbacks import Callbacks, LossCallback, MetricCallback
 import os
 import h5py
+import matplotlib
+matplotlib.use('agg')
 from matplotlib import pyplot as plt
 import pickle
 import matplotlib.patches as patches
@@ -33,7 +35,8 @@ parser.add_argument('--h5file')
 parser.add_argument('--num_train')
 parser.add_argument('--num_test_val')
 parser.add_argument('--preproc_data_dir')
-parser.set_defaults(batch_size=128,
+
+parser.set_defaults(batch_size=1000,
                     test=False,
                     #save_path=model_files_dir,
                     h5file='/global/project/projectdirs/nervana/yunjie/dataset/localization_test/expand_hurricanes_loc.h5',
@@ -58,9 +61,6 @@ num_epochs = args.epochs
 
 
 
-
-args.batch_size = 100
-args.eval_freq = 5
 
 
 X_train, y_train, tr_i, X_test, y_test, te_i, X_val, y_val, val_i, \
@@ -139,8 +139,9 @@ callbacks.add_callback(MetricCallback(mlp, eval_set=valid_set, metric=Misclassif
 
 if args.model_file:
     mlp.load_weights(args.model_file)
-else:
-    mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+
+
+mlp.fit(train_set, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 pickle.dump(mlp.serialize(), open(os.path.join(model_files_dir, '%s.pkl' % model_key), 'w'))
 
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
@@ -148,6 +149,10 @@ probs = mlp.get_outputs(valid_set)
 
 #probs will have shape (X_val.shape[0],2) number of example_images by the output vector of 2
 pos_probs = probs[:,1] #hust get second column which corresponds to prob of hurricane
+
+print val_i.shape[0]
+print cropped_ims[0].shape[1]
+print cropped_ims[0].shape[2]
 
 #probs.reshape to n_val_im by one input image channel shape so we can have prob map
 prob_map = pos_probs.reshape(val_i.shape[0], cropped_ims[0].shape[1], cropped_ims[0].shape[2])
@@ -173,7 +178,7 @@ for i in range(len(val_i)):
                        boxes[v_i][0, 3] - boxes[v_i][0, 1],
                        fill=False))
 
-    plt.savefig(os.path.join(images_dir, '%s-%i.jpg'%(os.path.splitext(os.path.basename(args.h5file))[0], i)))
+    plt.savefig(os.path.join(images_dir, '%s-%i.pdf'%(os.path.splitext(os.path.basename(args.h5file))[0], i)))
 
 
 
