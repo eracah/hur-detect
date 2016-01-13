@@ -44,7 +44,7 @@ def set_up_train_test_val(hurs, boxes, im_indices, train_test_val_dist):
     x_val, y_val = generate_input_and_labels(hurs, val_i, boxes)
     x_val, _ ,_ = normalize_each_channel(x_val, tr_means, tr_stds)
     x_val = x_val.reshape(x_val.shape[0], reduce(mul, x_val.shape[1:]))
-    return {'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,'x_val':x_val, 'y_val':y_val, 'boxes': boxes[im_indices]}
+    return {'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,'x_val':x_val, 'y_val':y_val, 'boxes': boxes}
 
 
 def get_indices(im_indices, train_test_val_dist):
@@ -202,14 +202,14 @@ def load_hurricane(path, num_train=6,num_test_val=2, load_from_disk=True, prepro
         pixels_to_use_per_image = (cols - 2 * rad) * (rows - 2 * rad)
 
         im_indices = range(train_test_val_dist['num_images'])
-        im_indices = np.random.RandomState(seed).shuffle(im_indices)
+        #np.random.RandomState(seed).shuffle(im_indices)
 
 
         data_dict = set_up_train_test_val(hurs, boxes, im_indices, train_test_val_dist)
 
         #get the hurricane images we are using and crop them down to only the pixels that are used can be centered on the window
         #ie the pixels to use
-        cropped_ims = hurs[im_indices, :, rad:rows - rad, rad:cols - rad]
+        cropped_ims = np.asarray(hurs[im_indices, :, rad:rows - rad, rad:cols - rad])
         data_dict['cropped_ims'] = cropped_ims
 
         #run tests
