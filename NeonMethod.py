@@ -19,7 +19,7 @@ import numpy as np
 import os
 import h5py
 from collections import deque
-from data_loaders import load_dayabay_conv
+#from data_loaders import load_dayabay_conv
 from custom_initializers import HeWeightInit
 import abc
 import numpy as np
@@ -28,14 +28,39 @@ matplotlib.use('agg')
 
 class NeonMethod(object):
     __metaclass__ = abc.ABCMeta
-    def __init__(self, net_name):
+    def __init__(self, net_name, results_dir):
+
+        run_dir, prev_dir = self.make_run_dir(results_dir)
         self.net_name = net_name
-        self.dirs = {'model_files_dir': './model_files/' + net_name, 'final_dir': './results/' + net_name,
-                'images_dir': './images/' + net_name}
+        self.dirs = {'model_files_dir': 'model_files', 'final_dir': 'results',
+                'images_dir': 'images'}
+        for k,v in self.dirs.iteritems():
+            dir = os.path.join(run_dir, v)
+            if not os.path.exists(dir):
+                os.mkdir(dir)
+            self.dirs[k] = dir
+        self.dirs['prev_model_dir'] = run_dir + '/model_files'
         self.setup_dirs(**self.dirs)
         self.eval_data_type = 'test' if self.args.test else 'val'
-        self.h5fin, self.final_h5_filename = self.create_h5_file(self.final_dir,
+        self.h5fin, self.dirs['h5_filename'] = self.create_h5_file(self.dirs['final_dir'],
                                                             self.args.epochs, self.args.learn_rate)
+
+    def make_run_dir(self, results_dir ):
+        if not os.path.exists(results_dir):
+            os.mkdir(results_dir)
+            num = 0
+        else:
+            if len(os.listdir(results_dir)) > 0:
+                run_nums = map(lambda fname: int(fname.split('_')[-1]), os.listdir(results_dir))
+                num = max(run_nums) + 1
+            else:
+                num = 0
+
+        run_dir = os.path.join(results_dir, 'run_' + str(num))
+        prev_run_dir = os.path.join(results_dir, 'run_' + str(num -1))
+        if not os.path.exists(run_dir):
+            os.mkdir(run_dir)
+        return run_dir, prev_run_dir
 
     def setup_parser(self):
         # parse the command line arguments
@@ -146,13 +171,16 @@ class NeonMethod(object):
         # return model_key
 
 
-    def save_orig_data(self,h5fin,X_train, y_train, X_val,y_val, X_test, y_test):
+    def save_orig_data(self,h5fin,X_train, y_train, X_val,y_val, X_test, y_test, bbox_tr, bbox_te, bbox_val):
         h5fin.create_dataset('raw/train/x', data=X_train)
         h5fin.create_dataset('raw/train/y', data=y_train)
         h5fin.create_dataset('raw/test/x', data=X_test)
         h5fin.create_dataset('raw/test/y', data=y_test)
         h5fin.create_dataset('raw/val/x', data=X_val)
         h5fin.create_dataset('raw/val/y', data=y_val)
+        h5fin.create_dataset('raw/train/boxes', data=bbox_tr)
+        h5fin.create_dataset('raw/test/boxes', data=bbox_te)
+        h5fin.create_dataset('raw/val/boxes', data=bbox_val)
 
 
     def plot_train_val_learning_curve(self,final_h5_file):
@@ -195,14 +223,14 @@ class NeonMethod(object):
 
     def setup_results(self, mlp, train_set, eval_set):
 
-        model_key = self.get_model_key(mlp,train_set)
-        self.args.save_path = self.model_files_dir + '/' + model_key + '.pkl'
+        model_key = self.get_model_key(mlp,train_set.ndata)
+        self.args.save_path = self.dirs['model_files_dir'] + '/' + model_key + '.pkl'
 
 
 
 
-        callbacks = Callbacks(mlp, train_set, self.args) # eval_set=eval_set the two callbacks below do this
-        callbacks.add_save_best_state_callback(self.model_files_dir)
+        callbacks = Callbacks(mlp, train_set, self.args, eval_set=eval_set) # eval_set=eval_set the two callbacks below do this
+        callbacks.add_save_best_state_callback(self.dirs['model_files_dir'])
 
         callbacks.add_callback(LossCallback(( self.h5fin.get('train_loss', False) if 'train_loss' in self.h5fin else self.h5fin.create_group('train_loss')),
                                             mlp, eval_set=train_set, epoch_freq=self.args.eval_freq))
@@ -222,24 +250,26 @@ class NeonMethod(object):
     def evaluate(self, mlp, eval_set):
 
 
-        h5ae_eval = self.h5fin.create_dataset(self.net_name + '/%s/x' % (self.eval_data_type),
-                                              (eval_set.ndata,
-                                               self.args.bneck_width)) if  self.net_name + '/%s/x'%(self.eval_data_type) not in self.h5fin else self.h5fin[self.net_name + '/%s/x' %(self.eval_data_type)]
+        # h5ae_eval = self.h5fin.create_dataset(self.net_name + '/%s/x' % (self.eval_data_type),
         # save_middle_layer_output(eval_set, h5ae_eval, mlp, self.args.bneck_width)
         eval_output = mlp.get_outputs(eval_set)
         self.h5fin.create_dataset(self.net_name + '/%s/output'%(self.eval_data_type), data=eval_output)
+        #print('Sum squared error = %.1f%%' % (mlp.eval(eval_set, metric=SumSquared()) * 100))
+        return eval_output
 
+    def save_weight_update_ratio(self):
+        pass
 
-    def save_and_plot(self, mlp):
+    def save_and_plot(self, mlp, n_tr_data):
 
-        self.plot_train_val_learning_curve(self.final_h5_filename)
+        self.plot_train_val_learning_curve(self.dirs['h5_filename'])
 
 
 
         # v = Vis(self.final_h5_filename, old=False, plot_tsne=True, reconstruct=False, pp_types='conv-ae,raw', data_types=self.eval_data_type, max_iter=self.args.max_tsne_iter)
         # v.plot()
 
-        pickle.dump(mlp.serialize(), open(os.path.join(self.model_files_dir, '%s-%s-%s.pkl'%(self.model_key, str(self.args.epochs), str(self.args.learn_rate))), 'w'))
+        pickle.dump(mlp.serialize(), open(os.path.join(self.dirs['model_files_dir'], '%s-%s-%s.pkl'%(self.get_model_key(mlp,n_tr_data), str(self.args.epochs), str(self.args.learn_rate))), 'w'))
 
     def main(self):
         train_set, eval_set = self.get_data()
