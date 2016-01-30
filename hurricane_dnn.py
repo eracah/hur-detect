@@ -55,10 +55,10 @@ class Localization(NeonMethod):
         return args
 
     def get_data(self):
-        lh = LoadHurricane( num_ims=self.args.num_ims, batch_size=self.args.batch_size)
+        lh = LoadHurricane(flatten=True, num_ims=self.args.num_ims, batch_size=self.args.batch_size)
         (X_tr, y_tr, bbox_tr), \
         (X_te, y_te, bbox_te), \
-        (X_val, y_val, bbox_val), x_dims, y_dims = lh.load_hurricane(path=self.args.h5file)
+        (X_val, y_val, bbox_val), (x_dims, y_dims) = lh.load_hurricane(path=self.args.h5file).values()
 
         self.save_orig_data(self.h5fin, X_tr, y_tr, X_val, y_val, X_te, y_te, bbox_tr, bbox_te, bbox_val)
         print X_tr.shape[1:]
@@ -81,9 +81,9 @@ class Localization(NeonMethod):
         conv = dict(strides=1, init=w_init, activation=Rectlin())  # , batch_norm=True)
         dconv = dict(init=w_init, strides=1, padding=0, batch_norm=False)
         #TODO code up simple architecture
-        layers = 5*[Conv((2, 2, 16), **conv)] + 4*[Deconv((2,2,16), **dconv)] +\
-         [Deconv((2, 2,2),init=w_init, strides=1, padding=0, batch_norm=False, activation= Softmax() )]
-        #layers = [Conv((2, 2, 16), **conv), Deconv((2, 2,2),init=w_init, strides=1, padding=0, batch_norm=False, activation= Softmax() )]
+        # layers = 5*[Conv((2, 2, 16), **conv)] + 4*[Deconv((2,2,16), **dconv)] +\
+        #  [Deconv((2, 2,2),init=w_init, strides=1, padding=0, batch_norm=False, activation= Softmax() )]
+        layers = [Conv((2, 2, 16), **conv), Deconv((2, 2,2),init=w_init, strides=1, padding=0, batch_norm=False, activation= Softmax() )]
 
 
         cost = GeneralizedCost(costfunc=MeanCrossEntropyBinary())
