@@ -6,8 +6,18 @@ import os
 import glob
 import sys
 import time
+from multiprocessing import Pool
+from functools import partial
 
 
+
+
+
+
+
+
+#1 0 is hur
+#0 1 is nhur
 class LoadHurricane():
     def __init__(self,batch_size=None, flatten=False, num_ims=None, seed=4):
         self.seed = seed
@@ -20,44 +30,45 @@ class LoadHurricane():
 
         print 'getting data...'
         h5f = h5py.File(path)
-        hurs_r = np.asarray(h5f['hurricane'])
-        print hurs_r.shape
-        dims = hurs_r.shape[1:]
-        #]hurs_r = hurs_r.reshape(hurs_r.shape[0], np.prod(hurs_r.shape[1:]))
-        #nhurs = h5f['nothurricane']
-        bboxes = np.asarray(h5f['hurricane_box']).reshape(hurs_r.shape[0],4)
+        hurs = h5f['hurricane'][:]
+        nhurs = h5f['nothurricane'][:]
+        hurs_bboxes = np.asarray(h5f['hurricane_box']).reshape(hurs.shape[0],4)
+        nhurs_bboxes = np.zeros((nhurs.shape[0],4))
+        #input_size = hurs.shape[0] + nhurs.shape[0]
+        #shp = ((hurs.shape[0]+nhurs.shape[0],) + hurs.shape[1:])
+
+        inputs = np.vstack((hurs,nhurs))
+        # tmpfile= os.path.basename(path + '/tst.h5')
+        # h5tmp = h5py.File(tmpfile)
+        # # if'inputs' not in h5tmp:
+        # inputs =h5tmp.create_dataset('inputs', shape=shp, dtype='f4')
+        # inputs[:hurs.shape[0]] = hurs
+        # inputs[hurs.shape[0]:] = nhurs
+        # # else:
+        # #     inputs = h5tmp['inputs']
+
+        bboxes = np.vstack((hurs_bboxes,nhurs_bboxes))
+        cl_labels = np.zeros((inputs.shape[0], 2))
+        cl_labels[:hurs.shape[0],0] = 1.
+        cl_labels[hurs.shape[0]:,1] = 1.
+
         if not self.num_ims:
-            self.num_ims = hurs_r.shape[0]
+            self.num_ims = inputs.shape[0]
+
 
         else:
             self.num_ims = self.num_ims
 
-        hur_masks = self.gen_masks(hurs_r[:self.num_ims],bboxes)
+        print self.num_ims
+
+
+        hur_masks = self.gen_masks(inputs[:self.num_ims],bboxes)
         self.y_dims = hur_masks.shape[1:]
-        hur_masks = hur_masks.reshape(hur_masks.shape[0], np.prod(hur_masks.shape[1:]))
+        #hur_masks = hur_masks.reshape(hur_masks.shape[0], np.prod(hur_masks.shape[1:]))
         tr_i, te_i, val_i = self.get_train_val_test_ix(self.num_ims)
 
-        return self.set_up_train_test_val(hurs_r, bboxes, hur_masks, tr_i, te_i, val_i)
+        return self.set_up_train_test_val(inputs, bboxes, hur_masks,cl_labels, tr_i, te_i, val_i)
 
-
-    #
-    # def adjust_train_val_test_sizes(self,batch_size, X_train, y_train, X_val, y_val, X_test, y_test ):
-    #     #make sure size of validation data a multiple of batch size (otherwise tough to match labels)
-    #
-    #     train_end = batch_size * (X_train.shape[0] / batch_size)
-    #     X_train = X_train[:train_end]
-    #     y_train = y_train[:train_end]
-    #
-    #     val_end = batch_size * (X_val.shape[0] / batch_size)
-    #     X_val = X_val[:val_end]
-    #     y_val = y_val[:val_end]
-    #
-    #     #make sure size of test data a multiple of batch size
-    #     test_end = batch_size * (X_test.shape[0] / batch_size)
-    #     X_test = X_test[:test_end]
-    #     y_test = y_test[:test_end]
-    #
-    #     return X_train, y_train, X_val, y_val, X_test, y_test
 
 
     def get_train_val_test_ix(self, num_ims):
@@ -86,18 +97,18 @@ class LoadHurricane():
         return tr_i, te_i, val_i
 
 
-    def set_up_train_test_val(self,hurs, boxes,hur_masks,tr_i,te_i, val_i):
+    def set_up_train_test_val(self,hurs, boxes,hur_masks, cl_labels, tr_i,te_i, val_i):
 
-        x_tr, y_tr, bbox_tr = hurs[tr_i], hur_masks[tr_i], boxes[tr_i]
+        x_tr, y_tr, bbox_tr, lbl_tr = hurs[tr_i], hur_masks[tr_i], boxes[tr_i], cl_labels[tr_i]
         x_tr, tr_means, tr_stds = self.normalize_each_channel(x_tr)
-
-
-        x_te, y_te, bbox_te = hurs[te_i], hur_masks[te_i], boxes[te_i]
+        self.test_masks(bbox_tr, y_tr,np.random.randint(x_tr.shape[0]))
+        x_te, y_te, bbox_te, lbl_te = hurs[te_i], hur_masks[te_i], boxes[te_i], cl_labels[te_i]
         x_te, _ ,_ = self.normalize_each_channel(x_te, tr_means, tr_stds)
 
-
-        x_val, y_val, bbox_val = hurs[val_i], hur_masks[val_i], boxes[val_i]
+        self.test_masks(bbox_te, y_te,np.random.randint(x_te.shape[0]))
+        x_val, y_val, bbox_val, lbl_val = hurs[val_i], hur_masks[val_i], boxes[val_i], cl_labels[val_i]
         x_val, _ ,_ = self.normalize_each_channel(x_val, tr_means, tr_stds)
+        self.test_masks(bbox_val, y_val,np.random.randint(x_val.shape[0]))
 
         if self.flatten:
             x_tr = x_tr.reshape(x_tr.shape[0], reduce(mul, x_tr.shape[1:]))
@@ -106,9 +117,9 @@ class LoadHurricane():
 
         x_dims = hurs.shape[1:]
 
-        return {'tr': (x_tr, y_tr, bbox_tr), \
-        'te':(x_te, y_te, bbox_te), \
-        'val': (x_val, y_val, bbox_val), 'dims': (x_dims, self.y_dims)}
+        return {'tr': (x_tr, y_tr, bbox_tr, lbl_tr), \
+        'te':(x_te, y_te, bbox_te, lbl_te), \
+        'val': (x_val, y_val, bbox_val, lbl_val)}
         # return {'x_train': x_tr, 'y_train': y_tr, 'x_test': x_te, 'y_test': y_te,'x_val':x_val, 'y_val':y_val, 'boxes': boxes}
 
     def normalize_each_channel(self,arr, means=[], stds=[]):
@@ -122,6 +133,13 @@ class LoadHurricane():
             arr[:, channel, :, :] /= std
         return arr, means, stds
 
+
+    def test_masks(self, box,mask, ind=0):
+        b = box[ind]
+        m = mask[ind]
+        section = m[:,b[0]:b[2], b[1]:b[3]]
+        assert np.all(section[0,:] == 1.), section[0]
+        assert np.all(section[1,:] == 0.)
 
 
     def gen_masks(self,hurs,bboxes):
@@ -144,7 +162,7 @@ class LoadHurricane():
             p_hur[i, bbox[0]:bbox[2],bbox[1]:bbox[3]] = 1.
             p_nhur[i, bbox[0]:bbox[2],bbox[1]:bbox[3]] = 0.
         print "gen_masks took: %5.2f seconds"%(time.time()-t)
-        hur_masks = np.vstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
+        hur_masks = np.hstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
         return hur_masks
 
 
