@@ -1,0 +1,12 @@
+#PBS -q regular
+#PBS -l mppwidth=24
+#PBS -l walltime=04:00:00
+#PBS -N my_job
+#PBS -e batchoutputs/train.$PBS_JOBID.err
+#PBS -o batchoutputs/train.$PBS_JOBID.out
+
+module load neon
+module load h5py
+cd $PBS_O_WORKDIR
+aprun -n 1 python ./hurricane_dnn.py --epochs 5
+
