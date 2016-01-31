@@ -9,8 +9,8 @@ import glob
 import sys
 import time
 from data_loader import LoadHurricane
-# if len(sys.argv) < 3:
-#     print "usage: %s %s %s" % (sys.argv[0], 'absolute h5_path')
+if len(sys.argv) < 3:
+    print "usage: %s %s %s %s" % (sys.argv[0], 'h5_path', 'desired_save_dir', 'use_negatve images')
 h5_path =  os.path.abspath(os.path.expandvars(sys.argv[1]))
 des_dir = os.path.abspath(os.path.expandvars(sys.argv[2]))
 use_neg = None
