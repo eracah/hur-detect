@@ -134,14 +134,18 @@ class LoadHurricane():
         return arr, means, stds
 
 
-    def test_masks(self, box,mask, ind=0):
-        b = box[ind]
+    def test_masks(self, bboxes,mask, ind=0):
+        bbox = bboxes[ind]
         m = mask[ind]
-        section = m[:,b[0]:b[2], b[1]:b[3]]
+        hmin, hmax, wmin, wmax = self.get_cooords(bbox)
+        section = m[:,hmin: hmax, wmin: wmax, ]
         assert np.all(section[0,:] == 1.), section[0]
         assert np.all(section[1,:] == 0.)
 
 
+    def get_cooords(self, bbox):
+        hmin, hmax, wmin, wmax = bbox[1],bbox[3], bbox[0],bbox[2]
+        return hmin, hmax, wmin, wmax
     def gen_masks(self,hurs,bboxes):
         '''
 
@@ -159,8 +163,9 @@ class LoadHurricane():
         #TODO: vectorize
         for i in range(hurs.shape[0]):
             bbox=bboxes[i]
-            p_hur[i, bbox[0]:bbox[2],bbox[1]:bbox[3]] = 1.
-            p_nhur[i, bbox[0]:bbox[2],bbox[1]:bbox[3]] = 0.
+            hmin, hmax, wmin, wmax = self.get_cooords(bbox)
+            p_hur[i, hmin:hmax, wmin:wmax] = 1.
+            p_nhur[i, hmin:hmax, wmin:wmax] = 0.
         print "gen_masks took: %5.2f seconds"%(time.time()-t)
         hur_masks = np.hstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
         return hur_masks

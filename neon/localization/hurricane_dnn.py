@@ -141,9 +141,9 @@ class Localization(NeonMethod):
 
     def add_bbox(self, subplot, bbox):
         subplot.add_patch(patches.Rectangle(
-        (bbox[0, 0], bbox[0, 1]),
-        bbox[0, 2] - bbox[0, 0],
-        bbox[0, 3] - bbox[0, 1],
+        xy=(bbox[0], bbox[1]),
+        width=bbox[2] - bbox[0],
+        height=bbox[3] - bbox[1],
         fill=False))
 
 
