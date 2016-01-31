@@ -26,7 +26,7 @@ class LoadHurricane():
         self.seed = seed
         self.flatten=flatten
     #TODO try on 96x96 (use bigger file -> get from cori)
-    def load_hurricane(self, path):
+    def load_hurricane(self, path, use_negative):
 
         print 'getting data...'
         h5f = h5py.File(path)
@@ -37,7 +37,10 @@ class LoadHurricane():
         #input_size = hurs.shape[0] + nhurs.shape[0]
         #shp = ((hurs.shape[0]+nhurs.shape[0],) + hurs.shape[1:])
 
-        inputs = np.vstack((hurs,nhurs))
+        if use_negative:
+            inputs = np.vstack((hurs,nhurs))
+        else:
+            inputs = hurs
         # tmpfile= os.path.basename(path + '/tst.h5')
         # h5tmp = h5py.File(tmpfile)
         # # if'inputs' not in h5tmp:
