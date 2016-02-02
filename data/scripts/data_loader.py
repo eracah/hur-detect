@@ -141,9 +141,11 @@ class LoadHurricane():
         bbox = bboxes[ind]
         m = mask[ind]
         hmin, hmax, wmin, wmax = self.get_cooords(bbox)
-        section = m[:,hmin: hmax, wmin: wmax, ]
-        assert np.all(section[0,:] == 1.), section[0]
-        assert np.all(section[1,:] == 0.)
+        section = m[hmin: hmax, wmin: wmax ]
+        not_sections = (m[:hmin,:wmin], m[:hmin, wmax:], m[hmax:,:wmin], m[hmax:,wmax:])
+        assert np.all(section == 1.), section
+        for not_section in not_sections:
+            assert np.all(not_section == 0), not_section
 
 
     def get_cooords(self, bbox):
@@ -155,23 +157,23 @@ class LoadHurricane():
         :param hurs: n_hurs x 8 x H x W array
         :param bboxes: n_hurs x 4 array
         :return:
-            n_hurs x 2 x H x W array
-                where the first cahnnel is p(hurricane) and second channel is p(not hurricane)
+            n_hurs x H x W array
+                where 1 is hurricane, 0 is not hurricane
 
         '''
         t = time.time()
         p_hur = np.zeros((hurs.shape[0], hurs.shape[2],hurs.shape[3]))
-        p_nhur = np.ones((hurs.shape[0], hurs.shape[2], hurs.shape[3]))
+        #p_nhur = np.ones((hurs.shape[0], hurs.shape[2], hurs.shape[3]))
 
         #TODO: vectorize
         for i in range(hurs.shape[0]):
             bbox=bboxes[i]
             hmin, hmax, wmin, wmax = self.get_cooords(bbox)
             p_hur[i, hmin:hmax, wmin:wmax] = 1.
-            p_nhur[i, hmin:hmax, wmin:wmax] = 0.
+            #p_nhur[i, hmin:hmax, wmin:wmax] = 0.
         print "gen_masks took: %5.2f seconds"%(time.time()-t)
-        hur_masks = np.hstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
-        return hur_masks
+        #hur_masks = np.hstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
+        return p_hur
 
 
 if __name__ == "__main__":
