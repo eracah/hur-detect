@@ -16,8 +16,8 @@ from functools import partial
 
 
 
-#1 0 is hur
-#0 1 is nhur
+#1 is hur
+#0 is nhur
 class LoadHurricane():
     def __init__(self,batch_size=None, flatten=False, num_ims=None, seed=4):
         self.seed = seed
@@ -51,9 +51,9 @@ class LoadHurricane():
         # #     inputs = h5tmp['inputs']
 
         bboxes = np.vstack((hurs_bboxes,nhurs_bboxes))
-        cl_labels = np.zeros((inputs.shape[0], 2))
-        cl_labels[:hurs.shape[0],0] = 1.
-        cl_labels[hurs.shape[0]:,1] = 1.
+        cl_labels = np.zeros((inputs.shape[0], 1))
+        cl_labels[:hurs.shape[0]] = 1.
+        #cl_labels[hurs.shape[0]:,1] = 1.
 
         if not self.num_ims:
             self.num_ims = inputs.shape[0]
