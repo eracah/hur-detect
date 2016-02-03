@@ -85,7 +85,7 @@ with open(dirname + '/README.txt', 'w') as b:
     b.write('Each h5 files contain four datasets:\n'
             'data: n_imagesx8xHxW mean centered patches containing' +( 'or not containing' if use_neg else '') + 'hurricanes\n'
              'label: n_images x 1 array 1 means hurricane 0 means not\n'
-             'mask: n_imagesxHxW array where a value of 1 mans hurricane at that location and 0 means not\n'
+             'mask: n_imagesx1xHxW array where a value of 1 mans hurricane at that location and 0 means not\n'
              'bbox: n_imagesx4 array where elements 1 and 3 are the hmin,hmax and 0 and 2 are wmin,wmax of the patch contiang hurricane\n')
 
 
