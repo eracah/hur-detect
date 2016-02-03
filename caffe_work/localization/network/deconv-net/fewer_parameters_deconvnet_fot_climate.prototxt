@@ -1,4 +1,4 @@
-name: "simple_deconv_network.prototxt"
+name: "fewer_parameters_deconvnet_fot_climate.prototxt"
 layers {
   name: "data"
   type: HDF5_DATA
