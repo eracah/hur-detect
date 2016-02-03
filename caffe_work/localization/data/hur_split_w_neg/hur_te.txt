@@ -1,0 +1,10 @@
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_0.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_1.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_2.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_3.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_4.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_5.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_6.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_7.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_8.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_te_9.h5

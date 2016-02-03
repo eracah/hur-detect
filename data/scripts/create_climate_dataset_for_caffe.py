@@ -34,7 +34,11 @@ des_txtdir = os.path.abspath(os.path.expandvars(sys.argv[3]))
 max_size_of_h5_files = None
 
 if len(sys.argv) > 4:
-    max_size_of_h5_files = int(sys.argv[4])
+    max_size_of_h5_files = sys.argv[4]
+    if max_size_of_h5_files == 'None':
+        max_size_of_h5_files = None
+    else:
+        max_size_of_h5_files = int(max_size_of_h5_files)
 use_neg = None
 if len(sys.argv) > 5:
     use_neg = sys.argv[5]
@@ -45,14 +49,15 @@ data_dict = l.load_hurricane(h5_path, use_neg)
 for dtype in ['tr','te','val']:
     x, mask, bbox, cl_lbl = data_dict[dtype]
 
-    filename = des_h5dir + '/' + 'hur' + ('_w_neg' if use_neg else '') + '/hur_' + dtype
+    base_hur_dirname = 'hur' + ('_split' if max_size_of_h5_files else '') +  ('_w_neg' if use_neg else '')
+    filename = des_h5dir + '/' + base_hur_dirname + '/hur_' + dtype
     dirname = os.path.dirname(filename)
     print dirname
     if not os.path.exists(dirname):
         os.mkdir(dirname)
 
 
-    txtdir = des_txtdir + '/' + 'hur' + ('_w_neg' if use_neg else '')
+    txtdir = des_txtdir + '/' + base_hur_dirname
     if not os.path.exists(txtdir):
             os.mkdir(txtdir)
 
