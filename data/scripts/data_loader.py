@@ -139,7 +139,7 @@ class LoadHurricane():
 
     def test_masks(self, bboxes,mask, ind=0):
         bbox = bboxes[ind]
-        m = mask[ind]
+        m = mask[ind,0]
         hmin, hmax, wmin, wmax = self.get_cooords(bbox)
         section = m[hmin: hmax, wmin: wmax ]
         not_sections = (m[:hmin,:wmin], m[:hmin, wmax:], m[hmax:,:wmin], m[hmax:,wmax:])
@@ -172,8 +172,9 @@ class LoadHurricane():
             p_hur[i, hmin:hmax, wmin:wmax] = 1.
             #p_nhur[i, hmin:hmax, wmin:wmax] = 0.
         print "gen_masks took: %5.2f seconds"%(time.time()-t)
+        hur_masks = p_hur.reshape((hurs.shape[0],1, hurs.shape[2],hurs.shape[3]))
         #hur_masks = np.hstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
-        return p_hur
+        return hur_masks
 
 
 if __name__ == "__main__":
