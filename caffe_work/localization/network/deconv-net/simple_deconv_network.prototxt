@@ -319,7 +319,7 @@ layers {
   name: "seg-accuracy"
   type: ELTWISE_ACCURACY
   bottom: "seg-score"
-  bottom: "seg-label"
+  bottom: "mask"
   top: "seg-accuracy"
   eltwise_accuracy_param {
     ignore_label: 255
@@ -331,7 +331,7 @@ layers {
   name: "seg-loss"
   type: SOFTMAX_LOSS
   bottom: "seg-score"
-  bottom: "seg-label"
+  bottom: "mask"
   top: "seg-loss"
   loss_param {
     ignore_label: 255
