@@ -3,7 +3,7 @@ layers {
   name: "data"
   type: HDF5_DATA
   top: "data"
-  top: "label"
+  top: "mask"
   hdf5_data_param {
     source: "data/hur_split_w_neg/hur_tr.txt"
     batch_size: 256
@@ -14,7 +14,7 @@ layers {
   name: "data"
   type: HDF5_DATA
   top: "data"
-  top: "label"
+  top: "mask"
   hdf5_data_param {
     source: "data/hur_split_w_neg/hur_val.txt"
     batch_size: 256
