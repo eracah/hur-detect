@@ -337,3 +337,13 @@ layers {
     ignore_label: 255
   }
 }
+layers {
+  name: "output"
+  type: HDF5_OUTPUT
+  bottom: "data"
+  bottom: "mask"
+  bottom: "seg_score"
+  hdf5_data_param {
+    file_name "network/deconv-net/results/fewer_params_final_data"
+  }
+}
