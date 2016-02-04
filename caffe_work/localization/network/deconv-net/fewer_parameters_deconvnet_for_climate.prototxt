@@ -6,7 +6,7 @@ layers {
   top: "mask"
   hdf5_data_param {
     source: "data/hur_split_w_neg/hur_tr.txt"
-    batch_size: 256
+    batch_size: 100
   }
   include: { phase: TRAIN }
 }
@@ -17,7 +17,7 @@ layers {
   top: "mask"
   hdf5_data_param {
     source: "data/hur_split_w_neg/hur_val.txt"
-    batch_size: 256
+    batch_size: 100
   }
   include: { phase: TEST }
 }

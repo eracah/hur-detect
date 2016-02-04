@@ -1,0 +1,2 @@
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_tr_0.h5
+/global/project/projectdirs/mantissa/climate/caffe_data/hur_split_w_neg/hur_tr_1.h5
