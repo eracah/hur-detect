@@ -343,7 +343,7 @@ layers {
   bottom: "data"
   bottom: "mask"
   bottom: "seg_score"
-  hdf5_data_param {
+  hdf5_output_param {
     file_name "network/deconv-net/results/fewer_params_final_data"
   }
 }
