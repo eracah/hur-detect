@@ -192,3 +192,18 @@ class LoadHurricane():
         hur_masks = p_hur.reshape((hurs.shape[0],1, hurs.shape[2],hurs.shape[3]))
         #hur_masks = np.hstack((p_hur, p_nhur)).reshape(hurs.shape[0], 2, hurs.shape[2], hurs.shape[3])
         return hur_massk
+    
+    
+    
+def load_dataset(path='/global/project/projectdirs/nervana/yunjie/dataset/localization/larger_hurricanes_loc.h5'):
+    lh = LoadHurricane()
+    datasets = lh.load_hurricane(path, use_negative=True)
+    
+    (X_train, y_train),
+    (X_val, y_val), 
+    (X_test, y_test) = [(datasets[k][0],datasets[k][2])
+                                                      for k in ['tr', 'val','te']]
+
+
+
+    return X_train, y_train, X_val, y_val, X_test, y_test
