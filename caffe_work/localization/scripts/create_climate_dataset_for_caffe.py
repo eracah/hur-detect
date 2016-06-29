@@ -1,1 +1,0 @@
-/global/homes/r/racah/projects/mantissa-climate/data/scripts/create_climate_dataset_for_caffe.py
