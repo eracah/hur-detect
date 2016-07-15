@@ -60,7 +60,7 @@ def plot_ims_with_boxes(ims, pred_bboxes, gt_bboxes, sanity_boxes=None, epoch=0,
         sp.imshow(ims[i])
         add_bbox(sp, pred_bboxes[i], color='r')
         add_bbox(sp, gt_bboxes[i], color='g')
-        plt.title('Boxes at Epoch %i'%(epoch))
+        #plt.title('Boxes at Epoch %i'%(epoch))
     if save_plots:
         plt.savefig("%s/epoch_%i_boxes.png"%(path,epoch))
         plt.savefig("%s/boxes.png"%(path))

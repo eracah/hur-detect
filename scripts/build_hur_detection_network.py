@@ -77,6 +77,7 @@ def strip_off_classif_fc_layers(class_net):
 
 def build_det_network(class_net, input_var,
                       layers_to_remove=3,
+                      delta=0.00001,
                       num_filters=512,
                       num_fc_units=1024,
                       num_extra_conv=1, 
@@ -119,7 +120,7 @@ def build_det_network(class_net, input_var,
     
     #compile theano functions
     train_fn, val_fn, box_fn = make_fns(network,input_var, det_target_var, lc, ln,
-                                        learning_rate, momentum, weight_decay)
+                                        learning_rate, momentum, weight_decay, delta)
     
     return train_fn, val_fn, box_fn, network, hyperparams
 
@@ -134,7 +135,7 @@ def load_weights(file_path, network):
 
 
 
-def make_fns(network,input_var, det_target_var, lc, ln, learning_rate, momentum, weight_decay):
+def make_fns(network,input_var, det_target_var, lc, ln, learning_rate, momentum, weight_decay, delta):
     '''Compiles theano train, test, box_fns'''
     #deterministic determines whether to use dropout or not in forward pass
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
@@ -142,7 +143,7 @@ def make_fns(network,input_var, det_target_var, lc, ln, learning_rate, momentum,
     
     
     def make_loss(pred):
-        loss = get_detec_loss(pred, det_target_var, lc, ln)
+        loss = get_detec_loss(pred, det_target_var, lc, ln, delta)
         weightsl2 = lasagne.regularization.regularize_network_params(network, lasagne.regularization.l2)
         loss += weight_decay * weightsl2
         return loss

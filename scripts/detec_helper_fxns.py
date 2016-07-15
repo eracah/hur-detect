@@ -107,7 +107,7 @@ def make_test_data(nclass = 1, grid_y = 6, grid_x = 6, n_bound_box = 1, n_ex = 1
 
 
 
-def get_detec_loss(pred,gt, lc,ln, delta=0.0001):
+def get_detec_loss(pred,gt, lc,ln, delta=0.00001):
     #TODO add in multiple bbox behavior
     
     #get number of examples and the indices of the tesnor 
