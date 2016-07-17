@@ -169,13 +169,13 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
     
 #TODO: load a classification dataset and a localization one   
 def load_classification_dataset(num_ims=-1, 
-                                path='/global/project/projectdirs/nervana/evan/detection_data/hur_class.h5',
+                                path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_class.h5',
                                 use_negative=True):
     return load_hurricane(path, num_ims=num_ims, detection=False, use_negative=use_negative)
 
 
 def load_detection_dataset(num_ims=-1, 
-                           path='/global/project/projectdirs/nervana/evan/detection_data/hur_detect.h5',
+                           path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_detect.h5',
                            use_negative=False, with_boxes=False):
     return load_hurricane(path, num_ims=num_ims, detection=True, use_negative=use_negative, with_boxes=with_boxes)
 

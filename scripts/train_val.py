@@ -11,10 +11,9 @@ import json
 import pickle
 from matplotlib import patches
 from helper_fxns import early_stop
-from build_hur_classif_network import build_classif_network
+
 from data_loader import load_classification_dataset, load_detection_dataset
 from print_n_plot import print_train_results,plot_learn_curve,print_val_results, plot_ims_with_boxes
-from build_hur_detection_network import build_det_network
 
 
 
@@ -80,40 +79,32 @@ def do_one_epoch(epoch,num_epochs, x_train,y_train, x_val, y_val, batchsize, tra
         
     
 
-def train(datasets, num_epochs, 
+def train(datasets, network,
+          fns, 
+          num_epochs, 
           mode='detection', 
           save_weights=False, 
           save_plots=True, 
           save_path='./results', 
           batchsize=128, 
-          network_kwargs={}, 
-          inmem_class_network=None,
           load_path=None):
     
     
 
+    if mode == 'detection':
+        train_fn, val_fn, box_fn = fns
+    else:
+        pass
+        
     #todo add in detect
-    x_tr, y_tr, b_tr,x_val, y_val,b_val, x_te, y_te, b_te = datasets
+    x_tr, y_tr,x_val, y_val, x_te, y_te = datasets
     
     if batchsize is None or x_tr.shape[0] < batchsize:
         batchsize = x_tr.shape[0]
-    
-    if mode=='classification':
-        train_fn,val_fn,input_var,network = build_classif_network(**network_kwargs)
-   
-    elif mode == 'detection':
-        if inmem_class_network:
-            train_fn,val_fn, box_fn, network,hyperparams = build_det_network(inmem_class_network,input_var, **network_kwargs)
-        elif load_path:
-            _,_,input_var,class_network = build_classif_network(load=True, load_path=load_path)
-            train_fn,val_fn, box_fn, network,hyperparams = build_det_network(class_network,input_var, **network_kwargs)
-        else:
-            print "running on non pretrained classif network!"
-            train_fn,val_fn,input_var,class_network = build_classif_network()
-            train_fn,val_fn,box_fn, network, hyperparams = build_det_network(class_network, input_var, **network_kwargs)
+
 
     
-    dump_hyperparams(hyperparams, save_path)
+  
     print "Starting training..." 
     
 
@@ -131,7 +122,7 @@ def train(datasets, num_epochs,
             if mode == 'detection':
                 if epoch % 100 == 0:
                     pred_boxes, gt_boxes = box_fn(x_tr,y_tr)
-                    plot_ims_with_boxes(x_tr[:12,1], pred_boxes, gt_boxes, epoch=epoch, sanity_boxes=b_tr,
+                    plot_ims_with_boxes(x_tr[:12,1], pred_boxes, gt_boxes, epoch=epoch,
                                         save_plots=save_plots, path=save_path)
 
             
@@ -144,16 +135,6 @@ def train(datasets, num_epochs,
         if save_weights and epoch % 10 == 0:
   
             np.savez('%s.npz'%(mode), *lasagne.layers.get_all_param_values(network))
-
-
-
-def dump_hyperparams(dic, path):
-    new_dic = {k:str(dic[k]) for k in dic.keys()}
-    with open(path + '/hyperparams.json', 'w') as f:
-        json.dump(new_dic, f)
-    with open(path + '/hyperparams.pkl','w') as g:
-        pickle.dump(dic, g)
-    
 
 
 
