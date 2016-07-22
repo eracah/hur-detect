@@ -182,7 +182,7 @@ def load_detection_dataset(num_ims=-1,
 def create_detection_gr_truth(xy,scale_factor, *bbox_arrays):
     #x_xy : 1,2 tuple with x and y sizes for image
     #scale_factor: factor to scale xy size by fro gr_truth grid for YOLO
-    scale_factor = float(scale_factor)
+    #scale_factor = float(scale_factor)
 
     gr_truths = []
     #make sure xy coords divide cleanly with scale_factor
