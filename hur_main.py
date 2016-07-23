@@ -5,9 +5,15 @@ import matplotlib; matplotlib.use("agg")
 import sys
 import matplotlib
 import argparse
+
+'''before we import theano anywhere else we want to make sure we specify 
+a unique directory for compiling, so we dont get into a locking issue
+if we run multiple hur_mains at once on a global file system'''
+from scripts.run_dir import create_run_dir
+run_dir = create_run_dir()
+from scripts.helper_fxns import dump_hyperparams
 from scripts.data_loader import load_classification_dataset, load_detection_dataset
 from scripts.train_val import train
-from scripts.helper_fxns import create_run_dir, dump_hyperparams
 from scripts.print_n_plot import plot_ims_with_boxes
 from scripts.build_network import build_network
 
@@ -35,11 +41,15 @@ parser.add_argument('-f', '--num_filters', default=512, type=int,
 
 parser.add_argument('-c', '--num_fc_units', default=512, type=int,
     help='number of fully connected units')
+
+parser.add_argument('-d', '--coord_loss', default=5, type=int,
+    help='penalty for guessing coordinates or height wrong')
 args = parser.parse_args()
 epochs = args.epochs
 learning_rate = args.learn_rate
 num_ims = args.num_ims
 num_filters = args.num_filters
+lc = args.lc
 
 
 run_dir = create_run_dir()
@@ -52,7 +62,7 @@ grid_size = dataset[1].shape[1]
 '''set params'''
 network_kwargs = {'learning_rate': learning_rate, 'dropout_p': 0, 'weight_decay': 0, 
                   'num_filters': num_filters, 'num_fc_units': num_fc_units}
-detec_network_kwargs = {'grid_size': grid_size, 'nclass': 1, 'n_boxes':1}
+detec_network_kwargs = {'grid_size': grid_size, 'nclass': 1, 'n_boxes':1, 'lc': lc, 'ln': ln}
 
 
 '''get network and train_fns'''

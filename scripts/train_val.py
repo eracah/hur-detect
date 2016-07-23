@@ -116,7 +116,7 @@ def train(datasets, network,
         
 
         
-        if epoch % 10 == 0:
+        if epoch % 10 == 0 and epoch !=0:
             plot_learn_curve(train_errs,val_errs, 'err', save_plots=save_plots, mode=mode,path=save_path)
             plot_learn_curve(train_accs,val_accs, 'acc', save_plots=save_plots, mode=mode, path=save_path)
             if mode == 'detection':

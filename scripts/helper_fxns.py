@@ -239,34 +239,6 @@ class early_stop(object):
 
 
 
-def create_run_dir():
-    results_dir = './results'
-    run_num_file = os.path.join(results_dir, "run_num.txt")
-    if not os.path.exists(results_dir):
-        print "making results dir"
-        os.mkdir(results_dir)
-
-    if not os.path.exists(run_num_file):
-        print "making run num file...."
-        f = open(run_num_file,'w')
-        f.write('0')
-        f.close()
-
-
-
-
-    f = open(run_num_file,'r+')
-
-    run_num = int(f.readline()) + 1
-
-    f.seek(0)
-
-    f.write(str(run_num))
-
-
-    run_dir = os.path.join(results_dir,'run%i'%(run_num))
-    os.mkdir(run_dir)
-    return run_dir
 
 
 
