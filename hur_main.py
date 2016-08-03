@@ -6,9 +6,10 @@ import sys
 import matplotlib
 import argparse
 
+
 '''before we import theano anywhere else we want to make sure we specify 
 a unique directory for compiling, so we dont get into a locking issue
-if we run multiple hur_mains at once on a global file system'''
+if we run multiple hur_mains at once on a global file system. Haven't truly implementedthis yet '''
 from scripts.run_dir import create_run_dir
 run_dir = create_run_dir()
 from scripts.helper_fxns import dump_hyperparams
@@ -19,13 +20,12 @@ from scripts.build_network import build_network
 
 
 
-epochs = 1
+epochs = 3
 learning_rate = 0.0001
 num_ims = 40
 num_filters = 128
 num_fc_units = 128
-
-
+lc =5 
 parser = argparse.ArgumentParser()
 parser.add_argument('-e', '--epochs', type=int, default=10,
     help='number of epochs for training')
@@ -42,14 +42,14 @@ parser.add_argument('-f', '--num_filters', default=512, type=int,
 parser.add_argument('-c', '--num_fc_units', default=512, type=int,
     help='number of fully connected units')
 
-parser.add_argument('-d', '--coord_loss', default=5, type=int,
+parser.add_argument('--coord_loss', default=5, type=int,
     help='penalty for guessing coordinates or height wrong')
 args = parser.parse_args()
 epochs = args.epochs
 learning_rate = args.learn_rate
 num_ims = args.num_ims
 num_filters = args.num_filters
-lc = args.lc
+lc = args.coord_loss
 
 
 run_dir = create_run_dir()
@@ -62,7 +62,7 @@ grid_size = dataset[1].shape[1]
 '''set params'''
 network_kwargs = {'learning_rate': learning_rate, 'dropout_p': 0, 'weight_decay': 0, 
                   'num_filters': num_filters, 'num_fc_units': num_fc_units}
-detec_network_kwargs = {'grid_size': grid_size, 'nclass': 1, 'n_boxes':1, 'lc': lc, 'ln': ln}
+detec_network_kwargs = {'grid_size': grid_size, 'nclass': 1, 'n_boxes':1, 'lc': lc}
 
 
 '''get network and train_fns'''
@@ -70,13 +70,10 @@ train_fn, val_fn, box_fn, network, hyperparams = build_network(mode='detection',
                                                                network_kwargs=network_kwargs, 
                                                                detec_specific_kwargs=detec_network_kwargs)
 
+hyperparams.update({'num_ims': num_ims, 'tr_size': dataset[0].shape[0]})
 '''save hyperparams'''
 dump_hyperparams(hyperparams, path=run_dir)
 
 '''train'''
 train(dataset, network=network, fns=(train_fn, val_fn, box_fn), num_epochs=epochs, save_path=run_dir)
-
-
-
-
 

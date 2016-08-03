@@ -6,6 +6,10 @@ import os
 
 
 
+import sys
+
+
+
 from shutil import copyfile
 import imp
 
@@ -15,7 +19,7 @@ import imp
 
 
 
-def create_run_dir():
+def create_run_dir(custom_rc=False):
     results_dir = os.getcwd() + '/results'
     run_num_file = os.path.join(results_dir, "run_num.txt")
     if not os.path.exists(results_dir):
@@ -43,7 +47,8 @@ def create_run_dir():
     run_dir = os.path.join(results_dir,'run%i'%(run_num))
     os.mkdir(run_dir)
     
-    make_custom_config_file(run_dir)
+    if custom_rc:
+        make_custom_config_file(run_dir)
     return run_dir
 
 

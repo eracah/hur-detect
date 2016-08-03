@@ -1,6 +1,5 @@
 import io, os, sys, types
 
-from IPython import get_ipython
 from nbformat import read
 from IPython.core.interactiveshell import InteractiveShell
 
@@ -46,7 +45,6 @@ class NotebookLoader(object):
         mod = types.ModuleType(fullname)
         mod.__file__ = path
         mod.__loader__ = self
-        mod.__dict__['get_ipython'] = get_ipython
         sys.modules[fullname] = mod
         
         # extra work to ensure that magics that would affect the user_ns
@@ -65,7 +63,6 @@ class NotebookLoader(object):
             self.shell.user_ns = save_user_ns
         return mod
 
-class NotebookFinder(object):
     """Module finder that locates Jupyter Notebooks"""
     def __init__(self):
         self.loaders = {}
