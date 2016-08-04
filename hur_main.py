@@ -20,14 +20,13 @@ from scripts.build_network import build_network
 
 
 
-epochs = 3
-learning_rate = 0.0001
-num_ims = 40
-num_filters = 128
-num_fc_units = 128
-lc =5 
+if inside a notebook, then get rid of weird notebook arguments, so that arg parsing still works
+if any(["jupyter" in arg for arg in sys.argv]):
+    sys.argv=sys.argv[:1]
+    
+
 parser = argparse.ArgumentParser()
-parser.add_argument('-e', '--epochs', type=int, default=10,
+parser.add_argument('-e', '--epochs', type=int, default=101,
     help='number of epochs for training')
 
 parser.add_argument('-l', '--learn_rate', default=0.0001, type=float,
@@ -36,44 +35,72 @@ parser.add_argument('-l', '--learn_rate', default=0.0001, type=float,
 parser.add_argument('-n', '--num_ims', default=40, type=int,
     help='number of total images')
 
-parser.add_argument('-f', '--num_filters', default=512, type=int,
+parser.add_argument('-f', '--num_filters', default=5, type=int,
     help='number of filters in each conv layer')
 
-parser.add_argument('-c', '--num_fc_units', default=512, type=int,
+parser.add_argument( '--num_fc_units', default=10, type=int,
     help='number of fully connected units')
 
-parser.add_argument('--coord_loss', default=5, type=int,
+parser.add_argument('--coord_penalty', default=5, type=int,
     help='penalty for guessing coordinates or height wrong')
+
+parser.add_argument('--nonobj_penalty', default=0.5, type=float,
+    help='penalty for guessing an object where one isnt')
+
+parser.add_argument('-c','--num_extra_conv', default=1, type=int,
+    help='conv layers to add on to each conv layer before max pooling')
+
+parser.add_argument('--num_convpool', default=4, type=int,
+    help='number of conv layer-pool layer pairs')
+
+parser.add_argument('--momentum', default=0.9, type=float,
+    help='momentum')
+
+
 args = parser.parse_args()
-epochs = args.epochs
-learning_rate = args.learn_rate
-num_ims = args.num_ims
-num_filters = args.num_filters
-lc = args.coord_loss
+
 
 
 run_dir = create_run_dir()
-
-dataset = load_detection_dataset(num_ims=num_ims)
+print run_dir
+dataset = load_detection_dataset(num_ims=args.num_ims)
 
 '''size of ground truth grid'''
 grid_size = dataset[1].shape[1]
 
 '''set params'''
-network_kwargs = {'learning_rate': learning_rate, 'dropout_p': 0, 'weight_decay': 0, 
-                  'num_filters': num_filters, 'num_fc_units': num_fc_units}
-detec_network_kwargs = {'grid_size': grid_size, 'nclass': 1, 'n_boxes':1, 'lc': lc}
+network_kwargs = {'learning_rate': args.learn_rate, 
+                  'dropout_p': 0, 
+                  'weight_decay': 0, 
+                  'num_filters': args.num_filters, 
+                  'num_fc_units': args.num_fc_units, 
+                  'num_convpool': args.num_convpool,
+                  'num_extra_conv': args.num_extra_conv,
+                  'momentum': args.momentum,
+                  'coord_penalty': args.coord_penalty,
+                  'nonobj_penalty': args.nonobj_penalty,
+                   }
 
 
 '''get network and train_fns'''
-train_fn, val_fn, box_fn, network, hyperparams = build_network(mode='detection', 
-                                                               network_kwargs=network_kwargs, 
-                                                               detec_specific_kwargs=detec_network_kwargs)
+train_fn, val_fn, box_fn, network, hyperparams = build_network(**network_kwargs)
 
-hyperparams.update({'num_ims': num_ims, 'tr_size': dataset[0].shape[0]})
+hyperparams.update({'num_ims': args.num_ims, 'tr_size': dataset[0].shape[0]})
 '''save hyperparams'''
 dump_hyperparams(hyperparams, path=run_dir)
 
 '''train'''
-train(dataset, network=network, fns=(train_fn, val_fn, box_fn), num_epochs=epochs, save_path=run_dir)
+train(dataset, network=network, fns=(train_fn, val_fn, box_fn), save_weights=True, num_epochs=args.epochs, save_path=run_dir)
+
+
+
+
+
+
+
+
+
+
+
+
 
