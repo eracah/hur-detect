@@ -42,6 +42,7 @@ def build_network(    input_shape=(None,8,96,96),
                       momentum = 0.9,
                       delta=0.00001,
                       coord_penalty = 5,
+                      size_penalty = 5,
                       nonobj_penalty = 0.5,
                       n_boxes=1,
                       nclass=1,
@@ -90,7 +91,7 @@ def build_network(    input_shape=(None,8,96,96),
         network = load_weights(load_path, network)
     
     #compile theano functions
-    train_fn, val_fn, box_fn = make_fns(network,input_var, target_var, coord_penalty, nonobj_penalty,
+    train_fn, val_fn, box_fn = make_fns(network,input_var, target_var, coord_penalty, size_penalty, nonobj_penalty,
                                         learning_rate, momentum, weight_decay, delta)
     
     return train_fn, val_fn, box_fn, network, hyperparams
@@ -158,7 +159,7 @@ def load_weights(file_path, network):
 
 
 
-def make_fns(network,input_var, det_target_var, lc, ln, learning_rate, momentum, weight_decay, delta):
+def make_fns(network,input_var, det_target_var, lcxy, lchw, ln, learning_rate, momentum, weight_decay, delta):
     '''Compiles theano train, test, box_fns'''
     #deterministic determines whether to use dropout or not in forward pass
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
@@ -166,7 +167,7 @@ def make_fns(network,input_var, det_target_var, lc, ln, learning_rate, momentum,
     
     
     def make_loss(pred):
-        loss = get_detec_loss(pred, det_target_var, lc, ln, delta)
+        loss = get_detec_loss(pred, det_target_var, lcxy, lchw, ln, delta)
         weightsl2 = lasagne.regularization.regularize_network_params(network, lasagne.regularization.l2)
         loss += weight_decay * weightsl2
         return loss
