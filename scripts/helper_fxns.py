@@ -109,7 +109,7 @@ def make_test_data(nclass = 1, grid_y = 6, grid_x = 6, n_bound_box = 1, n_ex = 1
 
 
 
-def get_detec_loss(pred,gt, lc,ln, delta=0.00001):
+def get_detec_loss(pred,gt, lcxy,lchw,ln, delta=0.00001):
     #TODO add in multiple bbox behavior
     
     #get number of examples and the indices of the tesnor 
@@ -142,17 +142,17 @@ def get_detec_loss(pred,gt, lc,ln, delta=0.00001):
     raw_loss1 = T.sum(s_x + s_y)
 
     #multipily by lambda coord (the scaling factor for bbox coords)
-    sterm1 = lc * raw_loss1
+    sterm1 = lcxy * raw_loss1
 
 
     #term2
 
-    #get sum of squared diff of the sqrt of heights and widths b/w pred and gt
-    s_w = T.square(T.sqrt(tp_obj[:,ws] + delta) - T.sqrt(tg_obj[:,ws] + delta))
-    s_h = T.square(T.sqrt(tp_obj[:,hs] + delta) - T.sqrt(tg_obj[:,hs] + delta))
+    #get sum of squared diff of the of heights and widths b/w pred and gt normalized by squared heights and widths of gt 
+    s_w = T.square((tp_obj[:,ws] - tg_obj[:,ws])) / T.square(tg_obj[:,ws])
+    s_h = T.square((tp_obj[:,hs] - tg_obj[:,hs])) / T.square(tg_obj[:,hs])
     raw_loss2 = T.sum(s_w + s_h)
 
-    sterm2 = lc * raw_loss2
+    sterm2 = lchw * raw_loss2
 
 
     #term3
@@ -175,14 +175,15 @@ def get_detec_loss(pred,gt, lc,ln, delta=0.00001):
 
     sterm4 = ln * raw_loss4
 
+    #only one class so no need here
     #get the sum of squared diffs for prob vectors for the classes where there is an object in gt vs. pred
-    s_p = T.square(tp_obj[:,ps] - tg_obj[:,ps])
+#     s_p = T.square(tp_obj[:,ps] - tg_obj[:,ps])
 
-    raw_loss5 = T.sum(s_p)
-    sterm5 = raw_loss5
+#     raw_loss5 = T.sum(s_p)
+#     sterm5 = raw_loss5
 
     #adds up terms divides by number of examples in the batch
-    terms = (1. / nex) * (sterm1 + sterm2 + sterm3 + sterm4 + sterm5)
+    terms = (1. / nex) * (sterm1 + sterm2 + sterm3 + sterm4) #+ sterm5)
     return terms
 
 #     fterms = theano.function([pred, gt], terms)
