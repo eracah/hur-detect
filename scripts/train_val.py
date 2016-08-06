@@ -46,7 +46,7 @@ def train_one_epoch(x,y,batchsize, train_fn, val_fn):
         train_batches += 1
     return train_err, train_acc, train_batches
 
-def val_one_epoch(x,y,batchsize, val_fn):
+def val_one_epoch(x, y, batchsize, val_fn):
         val_err = 0
         val_acc = 0
         val_batches = 0
@@ -57,8 +57,8 @@ def val_one_epoch(x,y,batchsize, val_fn):
             val_acc += acc
             val_batches += 1
         return val_err, val_acc, val_batches
-def do_one_epoch(epoch,num_epochs, x_train,y_train, x_val, y_val, batchsize, train_fn, val_fn,
-                 train_errs, train_accs, val_errs, val_accs, logging):
+def do_one_epoch(epoch,num_epochs, x_train, y_train, x_val, y_val, batchsize, train_fn, val_fn,
+                 train_errs, train_accs, val_errs, val_accs, val_counter, logging):
         start_time = time.time()
         tr_err, tr_acc, tr_batches = train_one_epoch(x_train, y_train,
                                                      batchsize=batchsize,
@@ -69,13 +69,16 @@ def do_one_epoch(epoch,num_epochs, x_train,y_train, x_val, y_val, batchsize, tra
         train_accs.append(tr_acc / tr_batches)
         print_train_results(epoch, num_epochs, start_time, tr_err / tr_batches, tr_acc / tr_batches, logging)
         
+        
+        if epoch % 50 == 0:
+            val_err, val_acc, val_batches = val_one_epoch(x_val, y_val,
+                                                         batchsize=y_val.shape[0],
+                                                          val_fn=val_fn)
 
-        val_err, val_acc, val_batches = val_one_epoch(x_val, y_val,
-                                                     batchsize=y_val.shape[0],
-                                                      val_fn=val_fn)
-        val_errs.append(val_err / val_batches)
-        val_accs.append(val_acc / val_batches)
-        print_val_results(val_err, val_acc / val_batches, logging)
+            val_counter.append(epoch)
+            val_errs.append(val_err / val_batches)
+            val_accs.append(val_acc / val_batches)
+            print_val_results(val_err, val_acc / val_batches, logging)
         
 
 def setup_logging(save_path):
@@ -118,21 +121,20 @@ def train(datasets, network,
         batchsize = x_tr.shape[0]
     
     
-    #pick 8 random images to look at
-    inds = np.random.randint(low=0, high=x_tr.shape[0], size=(8,))
+    #pick 6 random images to look at
+    inds = np.random.randint(low=0, high=x_tr.shape[0], size=(6,))
     
     print "Starting training..." 
-    train_errs, train_accs, val_errs, val_accs = [], [], [], []
+    train_errs, train_accs, val_errs, val_accs, val_counter = [], [], [], [], []
     for epoch in range(num_epochs):
-        do_one_epoch(epoch,num_epochs, x_tr, y_tr, x_val, y_val,
-                     batchsize, train_fn, val_fn, 
-                     train_errs, train_accs, val_errs, val_accs, logger)
+        do_one_epoch(epoch,num_epochs, x_tr, y_tr, x_val, y_val,batchsize, train_fn, val_fn,
+                     train_errs, train_accs, val_errs, val_accs,val_counter, logger)
         
 
         
         if epoch % 10 == 0 and epoch !=0:
-            plot_learn_curve(train_errs,val_errs, 'err', save_plots=save_plots,path=save_path)
-            plot_learn_curve(train_accs,val_accs, 'acc', save_plots=save_plots, path=save_path)
+            plot_learn_curve(train_errs,val_errs,val_counter, 'err', save_plots=save_plots,path=save_path)
+            plot_learn_curve(train_accs,val_accs,val_counter, 'acc', save_plots=save_plots, path=save_path)
 
             if epoch % 100 == 0:
                 pred_boxes, gt_boxes = box_fn(x_tr,y_tr)              
