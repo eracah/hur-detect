@@ -4,6 +4,9 @@ import matplotlib; matplotlib.use("agg")
 
 import h5py
 import numpy as np
+import os
+
+
 
 hur_file = h5py.File('/global/project/projectdirs/nervana/yunjie/dataset/localization/larger_hurricanes_loc.h5')
 
@@ -58,6 +61,107 @@ detect_file.create_dataset('not_hurricanes', data=detect_nhurs)
 
 detect_file.close()
 classif_file.close()
+
+
+
+path = '/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/'
+
+
+
+classif_file = h5py.File(path + 'hur_class.h5')
+
+
+
+detect_file = h5py.File(path + 'hur_detect.h5')
+
+
+
+train_file = h5py.File(path + 'hur_train_val.h5')
+
+detect_file['hurricanes'].shape
+
+detect_file.keys()
+
+tr_hurs = train_file.create_dataset('hurs', shape=(20000,8,96,96))
+
+tr_hurs[:15000] = detect_file['hurricanes']
+
+tr_hurs[15000:] = classif_file['hurricanes'][:5000]
+
+tr_hur_boxes = train_file.create_dataset('hur_boxes', shape=(20000,1,4))
+
+tr_hur_boxes[:15000] = detect_file['hurricane_boxes']
+
+tr_hur_boxes[15000:] = classif_file['hurricane_boxes'][:5000]
+
+tr_nhurs = train_file.create_dataset('nhurs', shape=(20000,8,96,96))
+
+tr_nhurs[:15000] = detect_file['not_hurricanes']
+
+tr_nhurs[15000:] = classif_file['not_hurricanes'][:5000]
+
+train_file.close()
+
+
+
+os.remove(path + 'hur_test.h5')
+
+
+
+test_file = h5py.File(path + 'hur_test.h5')
+
+
+
+te_hurs = test_file.create_dataset('hurs', shape=(5000,8,96,96))
+
+
+
+te_hurs[:5000] = classif_file['hurricanes'][5000:]
+
+te_hur_boxes = test_file.create_dataset('hur_boxes', shape=(5000,1,4))
+
+te_hur_boxes[:5000] = classif_file['hurricane_boxes'][5000:]
+
+te_nhurs = test_file.create_dataset('nhurs', shape=(5000,8,96,96))
+
+
+
+te_nhurs[:5000] = classif_file['not_hurricanes'][5000:]
+
+
+
+
+
+
+
+os.listdir(path)
+
+
+
+test_file.close()
+
+
+
+test_file['hur_boxes'].shape
+
+
+
+path
+
+
+
+
+
+
+train_file = h5py.File(path + 'hur_train_val.h5')
+
+
+
+test_file['hurs'][100,1]
+
+
+
+classif_file['hurricanes'][9999,0]
 
 
 
