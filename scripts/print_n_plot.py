@@ -31,12 +31,12 @@ def print_val_results(val_err, val_acc, logger):
     logger.info("  validation loss:\t\t{:.6f}".format(val_err))
     logger.info("  validation accuracy:\t\t{:.2f} %".format(val_acc * 100))
 
-def plot_learn_curve(train_errs_or_accs, val_errs_or_accs, err_or_acc, save_plots, path):
+def plot_learn_curve(train_errs_or_accs, val_errs_or_accs, val_counter, err_or_acc, save_plots, path):
         plt.figure(1 if err_or_acc == 'err' else 2)
         plt.clf()
         plt.title('Train/Val %s' %(err_or_acc))
         plt.plot(train_errs_or_accs, label='train ' + err_or_acc)
-        plt.plot(val_errs_or_accs, label='val' + err_or_acc)
+        plt.plot(val_counter, val_errs_or_accs, label='val' + err_or_acc)
         plt.legend( loc = 'center left', bbox_to_anchor = (1.0, 0.5),
            ncol=2)
         if save_plots:
@@ -61,7 +61,7 @@ def plot_ims_with_boxes(ims, pred_bboxes, gt_bboxes, sanity_boxes=None, epoch=0,
     for i in range(n_ims):
         for j in range(channels):  
             count+= 1
-            sp = plt.subplot(channels, n_ims, count)
+            sp = plt.subplot(n_ims,channels, count)
             sp.imshow(ims[i,j])
             add_bbox(sp, pred_bboxes[i], color='r')
             add_bbox(sp, gt_bboxes[i], color='g')
