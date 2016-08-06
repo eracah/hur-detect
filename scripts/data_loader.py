@@ -25,17 +25,17 @@ def load_hurricane(path,num_ims=-1, detection=False, use_negative=False, seed=7,
     print 'getting data...'
     h5f = h5py.File(path)
     if num_ims == -1:
-        hurs = h5f['hurricanes'][:]
-        nhurs = h5f['not_hurricanes'][:]
-        hur_boxes = h5f['hurricane_boxes'][:]
+        hurs = h5f['hurs'][:]
+        nhurs = h5f['nhurs'][:]
+        hur_boxes = h5f['hur_boxes'][:]
     else:
         if use_negative:
             num_each = num_ims / 2
         else:
             num_each = num_ims
-        hurs = h5f['hurricanes'][:num_each]
-        nhurs = h5f['not_hurricanes'][:num_each]
-        hur_boxes = h5f['hurricane_boxes'][:num_each]
+        hurs = h5f['hurs'][:num_each]
+        nhurs = h5f['nhurs'][:num_each]
+        hur_boxes = h5f['hur_boxes'][:num_each]
 
     hurs_bboxes = np.asarray(hur_boxes).reshape(hurs.shape[0],4)
     nhurs_bboxes = np.zeros((nhurs.shape[0],4))
@@ -169,13 +169,13 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
     
 #TODO: load a classification dataset and a localization one   
 def load_classification_dataset(num_ims=-1, 
-                                path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_class.h5',
+                                path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5',
                                 use_negative=True):
     return load_hurricane(path, num_ims=num_ims, detection=False, use_negative=use_negative)
 
 
 def load_detection_dataset(num_ims=-1, 
-                           path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_detect.h5',
+                           path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5',
                            use_negative=False, with_boxes=False):
     return load_hurricane(path, num_ims=num_ims, detection=True, use_negative=use_negative, with_boxes=with_boxes)
 
