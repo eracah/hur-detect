@@ -12,6 +12,7 @@ import theano
 from theano import tensor as T
 import sys
 import numpy as np
+from copy import deepcopy
 #enable importing of notebooks
 import inspect
 from helper_fxns import get_best_box, get_detec_loss, get_iou, make_test_data, get_detec_acc, get_final_box
@@ -113,6 +114,9 @@ def build_layers(input_var, **nk):
     conv_kwargs = dict(num_filters=nk['num_filters'], filter_size=(filter_dim,filter_dim), pad=(filter_dim - 1)/2, 
                        nonlinearity=nk['nonlinearity'], W=nk['w_init'])
     
+    extra_conv_kwargs = deepcopy(conv_kwargs)
+    extra_conv_kwargs.update({'num_filters': nk['num_filters'] / 2 })
+    
     #shape: 8x8x96
     network = lasagne.layers.InputLayer(shape=nk['input_shape'], input_var=input_var)
     
@@ -122,7 +126,7 @@ def build_layers(input_var, **nk):
         network = conv(network,**conv_kwargs )
         
         for _ in range(nk['num_extra_conv']):
-            network = conv(network,**conv_kwargs)
+            network = conv(network,**extra_conv_kwargs)
         
         network = maxpool(network, pool_size=(2,2))
         

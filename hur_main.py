@@ -3,8 +3,11 @@ import matplotlib; matplotlib.use("agg")
 
 
 import sys
+import os
 import matplotlib
 import argparse
+
+
 
 
 '''before we import theano anywhere else we want to make sure we specify 
@@ -12,7 +15,7 @@ a unique directory for compiling, so we dont get into a locking issue
 if we run multiple hur_mains at once on a global file system. Haven't truly implementedthis yet '''
 from scripts.run_dir import create_run_dir
 from scripts.helper_fxns import dump_hyperparams
-from scripts.data_loader import load_classification_dataset, load_detection_dataset
+from scripts.data_loader import load_data
 from scripts.train_val import train
 from scripts.print_n_plot import plot_ims_with_boxes
 from scripts.build_network import build_network
@@ -25,7 +28,7 @@ if any(["jupyter" in arg for arg in sys.argv]):
     
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-e', '--epochs', type=int, default=200,
+parser.add_argument('-e', '--epochs', type=int, default=10000,
     help='number of epochs for training')
 
 parser.add_argument('-l', '--learn_rate', default=0.0001, type=float,
@@ -34,10 +37,10 @@ parser.add_argument('-l', '--learn_rate', default=0.0001, type=float,
 parser.add_argument('-n', '--num_ims', default=30, type=int,
     help='number of total images')
 
-parser.add_argument('-f', '--num_filters', default=5, type=int,
+parser.add_argument('-f', '--num_filters', default=128, type=int,
     help='number of filters in each conv layer')
 
-parser.add_argument( '--fc', default=10, type=int,
+parser.add_argument( '--fc', default=512, type=int,
     help='number of fully connected units')
 
 parser.add_argument('--coord_penalty', default=5, type=int,
@@ -63,10 +66,11 @@ args = parser.parse_args()
 
 
 
+
 run_dir = create_run_dir()
 print run_dir
-dataset = load_detection_dataset(num_ims=args.num_ims,
-                                path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5')
+dataset = load_data(num_ims=args.num_ims,
+                    path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5')
 
 '''size of ground truth grid'''
 grid_size = dataset[1].shape[1]
@@ -94,10 +98,6 @@ dump_hyperparams(hyperparams, path=run_dir)
 
 '''train'''
 train(dataset, network=network, fns=(train_fn, val_fn, box_fn), save_weights=True, num_epochs=args.epochs, save_path=run_dir)
-
-
-
-
 
 
 
