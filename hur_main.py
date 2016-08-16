@@ -15,7 +15,7 @@ a unique directory for compiling, so we dont get into a locking issue
 if we run multiple hur_mains at once on a global file system. Haven't truly implementedthis yet '''
 from scripts.run_dir import create_run_dir
 from scripts.helper_fxns import dump_hyperparams
-from scripts.data_loader import load_data
+from scripts.data_loader import load_data, load_precomputed_data
 from scripts.train_val import train
 from scripts.print_n_plot import plot_ims_with_boxes
 from scripts.build_network import build_network
@@ -69,8 +69,12 @@ args = parser.parse_args()
 
 run_dir = create_run_dir()
 print run_dir
-dataset = load_data(num_ims=args.num_ims,
-                    path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5')
+
+dataset = load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/caffe_data/chur_train.h5",
+                                      "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/caffe_data/chur_val.h5" ],
+                                out_of_core=True)
+# dataset = load_data(num_ims=args.num_ims,
+#                     path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5')
 
 '''size of ground truth grid'''
 grid_size = dataset[1].shape[1]
@@ -97,11 +101,7 @@ hyperparams.update({'num_ims': args.num_ims, 'tr_size': dataset[0].shape[0]})
 dump_hyperparams(hyperparams, path=run_dir)
 
 '''train'''
-train(dataset, network=network, fns=(train_fn, val_fn, box_fn), save_weights=True, num_epochs=args.epochs, save_path=run_dir)
-
-
-
-
+train(dataset, network=network, fns=(train_fn, val_fn, box_fn),num_ims=args.num_ims, save_weights=True, num_epochs=args.epochs, save_path=run_dir)
 
 
 

@@ -12,24 +12,31 @@ import pickle
 from matplotlib import patches
 from helper_fxns import early_stop
 import logging
-#from data_loader import load_classification_dataset, load_detection_dataset
+from data_loader import load_precomputed_data
+from build_network import build_network
+from run_dir import create_run_dir
 from print_n_plot import print_train_results,plot_learn_curve,print_val_results, plot_ims_with_boxes
 
 
 
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
-    assert len(inputs) == len(targets), "inputs and targets different sizes"
+def iterate_minibatches(inputs, targets, batchsize, shuffle=False, num_ims=-1):
+    if num_ims == -1:
+        end_ind = inputs.shape[0]
+    else:
+        end_ind = num_ims
+        
+    assert inputs.shape[0] == targets.shape[0], "inputs and targets different sizes"
     if shuffle:
-        indices = np.arange(len(inputs))
+        indices = np.arange(inputs.shape[0])
         np.random.shuffle(indices)
-    if batchsize > inputs.shape[0]:
-        batchsize=inputs.shape[0]
-    for start_idx in range(0,len(inputs) - batchsize + 1, batchsize):
+    if batchsize > end_ind:
+        batchsize = end_ind
+    for start_idx in range(0, end_ind - batchsize + 1, batchsize):
         if shuffle:
             excerpt = indices[start_idx: start_idx + batchsize]
         else:
             excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
+        yield inputs[start_idx: start_idx + batchsize], targets[start_idx: start_idx + batchsize]
 
     
  
@@ -38,12 +45,12 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 
 
  
-def train_one_epoch(x,y,batchsize, train_fn, val_fn):
+def train_one_epoch(x,y,batchsize, train_fn, val_fn, num_ims):
  train_err = 0
  train_acc = 0
  train_batches = 0
  start_time = time.time()
- for batch in iterate_minibatches(x, y, batchsize, shuffle=True):
+ for batch in iterate_minibatches(x, y, batchsize, shuffle=True, num_ims=num_ims):
      inputs, targets = batch
      train_err += train_fn(inputs, targets)
      _, acc = val_fn(inputs, targets)
@@ -51,11 +58,11 @@ def train_one_epoch(x,y,batchsize, train_fn, val_fn):
      train_batches += 1
  return train_err, train_acc, train_batches
 
-def val_one_epoch(x, y, batchsize, val_fn):
+def val_one_epoch(x, y, batchsize, val_fn, num_ims):
      val_err = 0
      val_acc = 0
      val_batches = 0
-     for batch in iterate_minibatches(x,y, batchsize, shuffle=False):
+     for batch in iterate_minibatches(x,y, batchsize, shuffle=False, num_ims=num_ims):
          inputs, targets = batch
          err, acc = val_fn(inputs, targets)
          val_err += err
@@ -63,12 +70,12 @@ def val_one_epoch(x, y, batchsize, val_fn):
          val_batches += 1
      return val_err, val_acc, val_batches
 def do_one_epoch(epoch,num_epochs, x_train, y_train, x_val, y_val, batchsize, train_fn, val_fn,
-              train_errs, train_accs, val_errs, val_accs, val_counter, logger):
+              train_errs, train_accs, val_errs, val_accs, val_counter, logger, num_ims):
      start_time = time.time()
      tr_err, tr_acc, tr_batches = train_one_epoch(x_train, y_train,
                                                   batchsize=batchsize,
                                                   train_fn=train_fn,
-                                                  val_fn=val_fn)
+                                                  val_fn=val_fn, num_ims=num_ims)
              
      train_errs.append(tr_err / tr_batches)
      train_accs.append(tr_acc / tr_batches)
@@ -78,7 +85,7 @@ def do_one_epoch(epoch,num_epochs, x_train, y_train, x_val, y_val, batchsize, tr
      if epoch % 50 == 0:
          val_err, val_acc, val_batches = val_one_epoch(x_val, y_val,
                                                       batchsize=batchsize,
-                                                       val_fn=val_fn)
+                                                       val_fn=val_fn, num_ims=num_ims)
 
          val_counter.append(epoch)
          val_errs.append(val_err / val_batches)
@@ -105,7 +112,7 @@ def setup_logging(save_path):
 def train(datasets, network,
           fns, 
           num_epochs, 
-
+          num_ims=-1,
           save_weights=False, 
           save_plots=True, 
           save_path='./results', 
@@ -135,7 +142,7 @@ def train(datasets, network,
     train_errs, train_accs, val_errs, val_accs, val_counter = [], [], [], [], []
     for epoch in range(num_epochs):
         do_one_epoch(epoch,num_epochs, x_tr, y_tr, x_val, y_val,batchsize, train_fn, val_fn,
-                     train_errs, train_accs, val_errs, val_accs,val_counter, logger)
+                     train_errs, train_accs, val_errs, val_accs,val_counter, logger, num_ims)
         
 
         
@@ -162,21 +169,22 @@ def train(datasets, network,
 
 
 
-
-
-
-inds = np.random.randint
-
-
-
-inds = np.random.randint
-
-
-
-
 if __name__=="__main__":
-    dataset = load_detection_dataset(num_ims=40, with_boxes=True)
-    n = train(dataset,num_epochs=20, mode='detection',batchsize=24, network_kwargs={'num_filters':10,'num_fc_units':128, 'learning_rate': 0.001})
+    run_dir = create_run_dir()
+    xt,yt,xv,yv = load_precomputed_data()
+    train_fn, val_fn, box_fn, network, hyperparams = build_network(**{'num_filters': 10, 'num_fc_units': 10, 'num_extra_conv': 0})
+    print type(xt), type(yt)
+    for a,b in iterate_minibatches(xt, yt, 128, shuffle=False, num_ims=1000):
+        print type(a), a.shape, type(b), b.shape
+    train((xt,yt,xv,yv), network,
+          fns=(train_fn, val_fn, box_fn), 
+          num_epochs=3, 
+          num_ims=1000,
+          save_weights=False, 
+          save_plots=True, 
+          save_path=run_dir, 
+          batchsize=128, 
+          load_path=None)
 
 
 

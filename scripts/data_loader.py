@@ -21,8 +21,26 @@ import sys
 
 
 
+def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/caffe_data/chur_train.h5",
+                                "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/caffe_data/chur_val.h5" ],
+                             out_of_core=True):
+    #Can't slice the data here b/c slicing an h5py file object will read it into memory and we 
+    #want to do out of core
+    data = []
+    for path in paths:
+        h5o = h5py.File(path)
+        x,y = h5o['data'], h5o['label']
+        if not out_of_core:
+            x,y = x[:], y[:]
+        data.extend([x,y])
+    return data
+
+    
+        
+    
 def load_data(path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5',
               num_ims=-1,use_negative=False, scale_factor=16, just_test=False, use_boxes=False):
+    
     
     inputs, boxes, labels = load_hurricanes(path, num_ims, use_negative)
     
