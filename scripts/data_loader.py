@@ -21,8 +21,8 @@ import sys
 
 
 
-def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_train.h5",
-                                "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_val.h5" ],
+def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/theano_data/theano_hur_train.h5",
+                                "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/theano_data/theano_hur_val.h5" ],
                              out_of_core=True):
     #Can't slice the data here b/c slicing an h5py file object will read it into memory and we 
     #want to do out of core
@@ -39,7 +39,7 @@ def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bel
         
     
 def load_data(path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5',
-              num_ims=-1,use_negative=False, scale_factor=16, just_test=False, use_boxes=False, caffe_format=False):
+              num_ims=-1,use_negative=False, scale_factor=16, just_test=False, use_boxes=False, seed=4, caffe_format=False):
     
     
     inputs, boxes, labels = load_hurricanes(path, num_ims, use_negative)
@@ -51,11 +51,11 @@ def load_data(path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detect
         return ret
     else:
         if use_boxes:
-            x_tr, y_tr, box_tr, x_val, y_val, box_val = set_up_train_test_val(inputs, d_labels, boxes=boxes)
+            x_tr, y_tr, box_tr, x_val, y_val, box_val = set_up_train_test_val(inputs, d_labels, seed=seed, boxes=boxes)
             return x_tr, y_tr, box_tr, x_val, y_val, box_val
             
         else: 
-            x_tr, y_tr, x_val, y_val = set_up_train_test_val(inputs, d_labels)
+            x_tr, y_tr, x_val, y_val = set_up_train_test_val(inputs, d_labels,seed=seed)
             return x_tr, y_tr, x_val, y_val
 
 
@@ -112,15 +112,13 @@ def convert_bbox_minmax_to_cent_xywh(bboxes):
     return new_bboxes
     
     
-def get_train_val_test_ix(num_ims):
+def get_train_val_test_ix(num_ims,seed):
     # tr, te, val is 0.6,0.2,0.2
     ix = range(num_ims)
 
     n_val = int(0.2*num_ims)
     n_tr =  num_ims - n_val
 
-    seed = np.random.randint(0,20)
-    #shuffle once deterministically
     np.random.RandomState(seed).shuffle(ix)
     val_i = ix[:n_val]
     tr_i = ix[n_val:]
@@ -128,9 +126,9 @@ def get_train_val_test_ix(num_ims):
     return tr_i,val_i
 
 
-def set_up_train_test_val(hurs, labels,boxes=None):
+def set_up_train_test_val(hurs, labels, seed, boxes=None):
 
-    tr_i, val_i = get_train_val_test_ix(hurs.shape[0])
+    tr_i, val_i = get_train_val_test_ix(hurs.shape[0], seed)
     
 
 
