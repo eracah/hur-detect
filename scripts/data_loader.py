@@ -21,8 +21,8 @@ import sys
 
 
 
-def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/caffe_data/chur_train.h5",
-                                "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/caffe_data/chur_val.h5" ],
+def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_train.h5",
+                                "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_val.h5" ],
                              out_of_core=True):
     #Can't slice the data here b/c slicing an h5py file object will read it into memory and we 
     #want to do out of core
@@ -39,19 +39,24 @@ def load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bel
         
     
 def load_data(path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5',
-              num_ims=-1,use_negative=False, scale_factor=16, just_test=False, use_boxes=False):
+              num_ims=-1,use_negative=False, scale_factor=16, just_test=False, use_boxes=False, caffe_format=False):
     
     
     inputs, boxes, labels = load_hurricanes(path, num_ims, use_negative)
     
     xy_dims = np.asarray(inputs.shape[2:])
-    d_labels = create_detection_gr_truth(xy_dims, scale_factor, boxes)
+    d_labels = create_detection_gr_truth(xy_dims, scale_factor, boxes, caffe_format=caffe_format)
     if just_test:
         ret = [inputs, d_labels] if not use_boxes else [inputs, d_labels, boxes]
         return ret
     else:
-        x_tr, y_tr, x_val, y_val = set_up_train_test_val(inputs, d_labels)
-        return x_tr, y_tr, x_val, y_val
+        if use_boxes:
+            x_tr, y_tr, box_tr, x_val, y_val, box_val = set_up_train_test_val(inputs, d_labels, boxes=boxes)
+            return x_tr, y_tr, box_tr, x_val, y_val, box_val
+            
+        else: 
+            x_tr, y_tr, x_val, y_val = set_up_train_test_val(inputs, d_labels)
+            return x_tr, y_tr, x_val, y_val
 
 
 def load_hurricanes(path,num_ims=-1, use_negative=False):
@@ -123,7 +128,7 @@ def get_train_val_test_ix(num_ims):
     return tr_i,val_i
 
 
-def set_up_train_test_val(hurs, labels):
+def set_up_train_test_val(hurs, labels,boxes=None):
 
     tr_i, val_i = get_train_val_test_ix(hurs.shape[0])
     
@@ -139,8 +144,12 @@ def set_up_train_test_val(hurs, labels):
     x_val, lbl_val = hurs[val_i], labels[val_i]
     x_val,_,_ = normalize(x_val, tr_min, tr_max)
     
-    
-    return x_tr, lbl_tr, x_val, lbl_val
+    if type(boxes) != type(None):
+        box_tr = boxes[tr_i]
+        box_val = boxes[val_i]
+        return x_tr, lbl_tr, box_tr, x_val, lbl_val, box_val
+    else:
+        return x_tr, lbl_tr, x_val, lbl_val
     
 
 
@@ -179,7 +188,7 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
 
 
 
-def create_detection_gr_truth(xy, scale_factor, bbox_array):
+def create_detection_gr_truth(xy, scale_factor, bbox_array, caffe_format=False):
     #x_xy : 1,2 tuple with x and y sizes for image
     #scale_factor: factor to scale xy size by fro gr_truth grid for YOLO
     #scale_factor = float(scale_factor)
@@ -190,7 +199,7 @@ def create_detection_gr_truth(xy, scale_factor, bbox_array):
     
     
     x_len,y_len = xy[0] / scale_factor, xy[1] / scale_factor
-    last_dim = 6 #x,y,w,h,c plus one binary number for phur or pnot
+    last_dim = 7 #x,y,w,h,c plus two binary number for phur or pnot for one hot encoding
 
 
     #divide up bbox with has range 0-95 to 0-95/scale_factor (so 6x6 for scale factor of 16)
@@ -207,12 +216,15 @@ def create_detection_gr_truth(xy, scale_factor, bbox_array):
     #subtract the floored values to get the offset from the grid cell
     xywh[:,:2] -= inds[:,:2].astype('float')
 
-    #divide by scaled width and height to get wdith and height relative to width and height of iage
+    #divide by scaled width and height to get wdith and height relative to width and height of image
     xywh[:,2] /= x_len
     xywh[:,3] /= y_len
 
     #make gr_truth which is 
-    gr_truth = np.zeros((bbox_array.shape[0],x_len ,y_len, last_dim))
+    if caffe_format:
+        gr_truth = np.zeros((bbox_array.shape[0],last_dim, x_len, y_len ))
+    else:
+        gr_truth = np.zeros((bbox_array.shape[0],x_len ,y_len, last_dim))
 
     #sickens me to a do a for loop here, but numpy ain't cooperating
     # I tried gr_truth[np.arange(gr_truth.shape[0]),inds[:0], inds[:1]][:,4] = xywh
@@ -221,34 +233,53 @@ def create_detection_gr_truth(xy, scale_factor, bbox_array):
     # we assume one box per image here
     # for each grid point that is center of image plop in center, and width and height and class
     for i in range(gr_truth.shape[0]):
-        #put coordinates
-        gr_truth[i,inds[i,0], inds[i,1], :4] = xywh[i]
+        if caffe_format:
+            #put coordinates
+            gr_truth[i, :4,inds[i,0], inds[i,1]] = xywh[i]
 
-        #put in confidence
-        gr_truth[i,inds[i,0], inds[i,1], 4] = 1 if np.sum(xywh[i]) > 0. else 0.
+            #put in confidence
+            gr_truth[i, 4, inds[i,0], inds[i,1]] = 1 if np.sum(xywh[i]) > 0. else 0.
 
-        #put in class label
-        gr_truth[i,inds[i,0], inds[i,1], 5] = 1 if np.sum(xywh[i]) > 0. else 0.
+            #put in class label
+            gr_truth[i, 5, inds[i,0], inds[i,1]] = 1 if np.sum(xywh[i]) > 0. else 0.
+            
+            gr_truth[i,6, inds[i,0], inds[i,1]] = 0. if np.sum(xywh[i]) > 0. else 1.
         
+        else:
+            #put coordinates
+            gr_truth[i,inds[i,0], inds[i,1], :4] = xywh[i]
+
+            #put in confidence
+            gr_truth[i,inds[i,0], inds[i,1], 4] = 1 if np.sum(xywh[i]) > 0. else 0.
+
+            #put in class label
+            gr_truth[i,inds[i,0], inds[i,1], 5] = 1. if np.sum(xywh[i]) > 0. else 0.
+
+            gr_truth[i,inds[i,0], inds[i,1], 6] = 0. if np.sum(xywh[i]) > 0. else 1.
         
 
     return gr_truth
 
-def test_grid(bbox, grid):
-    x,y = bbox[0] / 16, bbox[1] / 16
-    xo,yo = (bbox[0] % 16) / 16., (bbox[1] % 16) / 16.
-    w,h = bbox[2] / 16 /6, bbox[3] / 16/6
-
-    print grid[x,y,:6]
-    print np.array([xo,yo,w,h,1.,1.])
+def test_grid(bbox, grid, orig_dim=96, scale_factor=16, caffe_format=False):
+    x,y = bbox[0] / scale_factor, bbox[1] / scale_factor
+    xo,yo = (bbox[0] % scale_factor) / float(scale_factor), (bbox[1] % scale_factor) / float(scale_factor)
+    w,h = bbox[2] / scale_factor / (orig_dim / scale_factor), bbox[3] / scale_factor/ (orig_dim / scale_factor)
+    
+    if caffe_format:
+        l_box = grid[:7,x,y]
+    else:
+        l_box = grid[x,y,:7]
+    real_box = np.array([xo,yo,w,h,1.,1., 0.])
+    print l_box
+    print real_box
+    assert np.allclose(l_box, real_box), "Tests Failed"
 
 
 
 
 if __name__ == "__main__":
-    xt,yt,xv,yv= load_data(num_ims=40)
-
-
-
-
+    xt,yt,bt,xv,yv,bv = load_data(num_ims=40, caffe_format=True, use_boxes=True)
+    for i in np.random.randint(0,xt.shape[0], size=(5)):
+        test_grid(bt[i], yt[i], caffe_format=True)
+        
 
