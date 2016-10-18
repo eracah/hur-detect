@@ -70,11 +70,11 @@ args = parser.parse_args()
 run_dir = create_run_dir()
 print run_dir
 
-dataset = load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_train.h5",
-                                      "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_val.h5" ],
-                                out_of_core=True)
-# dataset = load_data(num_ims=args.num_ims,
-#                     path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5')
+#dataset = load_precomputed_data(paths=["/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_train.h5",
+#                                      "/global/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/chur_val.h5" ],
+#                                out_of_core=True)
+dataset = load_data(num_ims=args.num_ims,
+                     path='/project/projectdirs/dasrepo/gordon_bell/climate/data/detection/hur_train_val.h5')
 
 '''size of ground truth grid'''
 grid_size = dataset[1].shape[1]

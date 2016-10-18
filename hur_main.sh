@@ -1,6 +1,10 @@
 #!/bin/bash -l
 
 [ -a batch_outputs ] || mkdir batch_outputs
-module load python
-module load deeplearning
+if [ ! -z "$INTEL_THEANO" ]
+then
+ module load inteltheano
+else
+ module load deeplearning
+fi
 python hur_main.py $@
