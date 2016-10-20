@@ -20,30 +20,14 @@ from matplotlib import patches
 
 
 
-def print_train_results(epoch, num_epochs, start_time, tr_err, tr_acc, logger):
-    # Then we print the results for this epoch:
-    logger.info("Epoch {} of {} took {:.3f}s".format(epoch + 1, num_epochs, time.time() - start_time))
-    logger.info("\ttraining los:\t\t{:.4f}".format(tr_err))
-    logger.info("\ttraining acc:\t\t{:.4f} %".format(tr_acc * 100))
+
 
 
 def print_val_results(val_err, val_acc, logger):
     logger.info("  validation loss:\t\t{:.6f}".format(val_err))
     logger.info("  validation accuracy:\t\t{:.2f} %".format(val_acc * 100))
 
-def plot_learn_curve(train_errs_or_accs, val_errs_or_accs, val_counter, err_or_acc, save_plots, path):
-        plt.figure(1 if err_or_acc == 'err' else 2)
-        plt.clf()
-        plt.title('Train/Val %s' %(err_or_acc))
-        plt.plot(train_errs_or_accs, label='train ' + err_or_acc)
-        plt.plot(val_counter, val_errs_or_accs, label='val' + err_or_acc)
-        plt.legend( loc = 'center left', bbox_to_anchor = (1.0, 0.5),
-           ncol=2)
-        if save_plots:
-            plt.savefig("%s/%s_learning_curve.png"%(path,err_or_acc))
-            pass
-        else:
-            pass
+
 
             
 

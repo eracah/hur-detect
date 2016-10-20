@@ -15,180 +15,188 @@ import logging
 from data_loader import load_precomputed_data
 from build_network import build_network
 from run_dir import create_run_dir
-from print_n_plot import print_train_results,plot_learn_curve,print_val_results, plot_ims_with_boxes
+from netcdf_loader import bbox_iterator
 
 
-
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False, num_ims=-1):
-    if num_ims == -1:
-        end_ind = inputs.shape[0]
-    else:
-        end_ind = num_ims
+class TrainVal(object):
+    def __init__(self, iterator, tr_kwargs, val_kwargs, num_epochs, fns, save_path, n_ims_to_plot=6):
+        self.train_errs, self.train_accs, self.val_errs, self.val_accs = [], [], [], [], []
+        self.iterator = iterator
+        self.tr_kwargs = tr_kwargs
+        self.val_kwargs = val_kwargs
+        self.num_epochs = num_epochs
+        self.tr_fn, self.val_fn, self.box_fn = fns
+        self.n_ims_to_plot = n_ims_to_plot
+        self.logger = self.setup_logging(save_path)
+        self.epoch = 0
+        self.start_time = 0
+        self.seed = 5
+    def train_one_epoch(self, it_kwargs):
+        self.epoch += 1
+        self.start_time = time.time()
+        train_err = 0
+        train_acc = 0
+        train_batches = 0
+        start_time = time.time()
+        for x,y in self.iterator(**self.train_kwargs):
+            train_err += self.tr_fn(x,y)
+            _, acc = self.val_fn(x,y)
+            train_acc += acc
+            train_batches += 1
         
-    assert inputs.shape[0] == targets.shape[0], "inputs and targets different sizes"
-    if shuffle:
-        indices = np.arange(inputs.shape[0])
-        np.random.shuffle(indices)
-    if batchsize > end_ind:
-        batchsize = end_ind
-    for start_idx in range(0, end_ind - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx: start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[start_idx: start_idx + batchsize], targets[start_idx: start_idx + batchsize]
+
+        self.train_errs.append(tr_err / tr_batches)
+        self.train_accs.append(tr_acc / tr_batches)
+        print_results(tr_err / tr_batches, tr_acc / tr_batches, "train")
+    
+    def val_one_epoch(self, it_kwargs):
+        self.start_time = time.time()
+        val_err = 0
+        val_acc = 0
+        val_batches = 0
+        for x,y in self.iterator(**self.val_kwargs):
+            err, acc = val_fn(x,y)
+            val_err += err
+            val_acc += acc
+            val_batches += 1
+        self.val_errs.append(val_err / val_batches)
+        self.val_accs.append(val_acc / val_batches)
+        print_results(val_err / val_batches, val_acc / val_batches, logger)
+        
+
+    def print_results(self, err, acc, typ="train"):
+        self.logger.info("Epoch {} of {} took {:.3f}s".format(self.epoch, self.num_epochs, time.time() - self.start_time))
+        self.logger.info("\t" + typ + " los:\t\t{:.4f}".format(tr_err))
+        self.logger.info("\t" + typ + "acc:\t\t{:.4f} %".format(tr_acc * 100))
+    
+
+    def plot_learn_curve(self):
+        self._plot_learn_curve('err')
+        self._plot_learn_curve('acc')
+        
+    def _plot_learn_curve(self,type_):
+        plt.figure(1 if type_== 'err' else 2)
+        plt.clf()
+        plt.title('Train/Val %s' %(type_))
+        tr_arr = self.train_errs if type_ == 'err' else self.train_accs
+        val_arr = self.val_errs if type_ == 'err' else self.val_accs
+        plt.plot(tr_arr, label='train ' + type_)
+        plt.plot(val_arr, label='val' + type_)
+        plt.legend( loc = 'center left', bbox_to_anchor = (1.0, 0.5),
+           ncol=2)
+
+        plt.savefig("%s/%s_learning_curve.png"%(self.save_path))
+        pass
+    
+    
+#     def plot_ims_with_boxes(n_ims):
+#         for x,y in self.tr_iterator:
+#             im = x[0]
+            
+#     def _plot_im_with_boxes(ims, pred_bboxes, gt_bboxes, sanity_boxes=None):
+#         #bbox of form center x,y,w,h
+#         n_ims = ims.shape[0]
+#         channels = ims.shape[1]
+#         plt.figure(1, figsize=(80,80))
+
+#         #sanity boxes is the original bounding boxes
+#         if sanity_boxes is not None:
+#             assert np.isclose(gt_bboxes, sanity_boxes).all()
+
+#         count=0
+#         for i in range(n_ims):
+#             for j in range(channels):  
+#                 count+= 1
+#                 sp = plt.subplot(n_ims,channels, count)
+#                 sp.imshow(ims[i,j])
+#                 add_bbox(sp, pred_bboxes[i], color='r')
+#                 add_bbox(sp, gt_bboxes[i], color='g')
+#         if save_plots:
+#             plt.savefig("%s/epoch_%i_boxes.png"%(self.save_path,self.epoch))
+#             plt.savefig("%s/boxes.png"%(path))
+#             pass
+#         else:
+#             pass
+
+
+#     def add_bbox(subplot, bbox, color):
+#         #box of form center x,y  w,h
+#         x,y,w,h = bbox
+#         subplot.add_patch(patches.Rectangle(
+#         xy=(x - w / 2. , y - h / 2.),
+#         width=w,
+#         height=h, lw=2,
+#         fill=False, color=color))
+
+
+    def setup_logging(self,save_path):
+        self.logger = logging.getLogger('simple_example')
+        self.logger.setLevel(logging.DEBUG)
+        # create file handler which logs even debug messages
+        fh = logging.FileHandler('%s/training.log'%(save_path))
+        fh.setLevel(logging.DEBUG)
+        # create console handler with a higher log level
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        self.logger.addHandler(ch)
+        self.logger.addHandler(fh)
+        
+    
 
     
- 
 
-
-
-
- 
-def train_one_epoch(x,y,batchsize, train_fn, val_fn, num_ims):
- train_err = 0
- train_acc = 0
- train_batches = 0
- start_time = time.time()
- for batch in iterate_minibatches(x, y, batchsize, shuffle=True, num_ims=num_ims):
-     inputs, targets = batch
-     train_err += train_fn(inputs, targets)
-     _, acc = val_fn(inputs, targets)
-     train_acc += acc
-     train_batches += 1
- return train_err, train_acc, train_batches
-
-def val_one_epoch(x, y, batchsize, val_fn, num_ims):
-     val_err = 0
-     val_acc = 0
-     val_batches = 0
-     for batch in iterate_minibatches(x,y, batchsize, shuffle=False, num_ims=num_ims):
-         inputs, targets = batch
-         err, acc = val_fn(inputs, targets)
-         val_err += err
-         val_acc += acc
-         val_batches += 1
-     return val_err, val_acc, val_batches
-def do_one_epoch(epoch,num_epochs, x_train, y_train, x_val, y_val, batchsize, train_fn, val_fn,
-              train_errs, train_accs, val_errs, val_accs, val_counter, logger, num_ims):
-     start_time = time.time()
-     tr_err, tr_acc, tr_batches = train_one_epoch(x_train, y_train,
-                                                  batchsize=batchsize,
-                                                  train_fn=train_fn,
-                                                  val_fn=val_fn, num_ims=num_ims)
-             
-     train_errs.append(tr_err / tr_batches)
-     train_accs.append(tr_acc / tr_batches)
-     print_train_results(epoch, num_epochs, start_time, tr_err / tr_batches, tr_acc / tr_batches, logger)
-     
-     
-     if epoch % 50 == 0:
-         val_err, val_acc, val_batches = val_one_epoch(x_val, y_val,
-                                                      batchsize=batchsize,
-                                                       val_fn=val_fn, num_ims=num_ims)
-
-         val_counter.append(epoch)
-         val_errs.append(val_err / val_batches)
-         val_accs.append(val_acc / val_batches)
-         print_val_results(val_err, val_acc / val_batches, logger)
-     
-
-def setup_logging(save_path):
- logger = logging.getLogger('simple_example')
- logger.setLevel(logging.DEBUG)
- # create file handler which logs even debug messages
- fh = logging.FileHandler('%s/training.log'%(save_path))
- fh.setLevel(logging.DEBUG)
- # create console handler with a higher log level
- ch = logging.StreamHandler()
- ch.setLevel(logging.DEBUG)
- logger.addHandler(ch)
- logger.addHandler(fh)
- return logger
- 
-
-
-
-def train(datasets, network,
+def train(iterator, network,
           fns, 
           num_epochs, 
-          num_ims=-1,
+          num_ims=20,
           save_weights=False, 
-          save_plots=True, 
           save_path='./results', 
-          batchsize=128, 
           load_path=None):
     
     
-    logger = setup_logging(save_path)
-
-
-    
-    
-    train_fn, val_fn, box_fn = fns
-
-        
-    #todo add in detect
-    x_tr, y_tr,x_val, y_val = datasets
-    
-    if batchsize is None or x_tr.shape[0] < batchsize:
-        batchsize = x_tr.shape[0]
-    
-    
-    #pick 6 random images to look at
-    inds = np.random.randint(low=0, high=x_tr.shape[0], size=(6,))
-    
     print "Starting training..." 
-    train_errs, train_accs, val_errs, val_accs, val_counter = [], [], [], [], []
+    
+    tr_kwargs = dict(years=[1979], days=num_ims)
+    val_kwargs= dict(years=[1980], days=0.2*num_ims)
+    
+    tv = TrainVal(bbox_iterator, tr_kwargs,val_kwargs, num_epochs, fns, save_path)
     for epoch in range(num_epochs):
-        do_one_epoch(epoch,num_epochs, x_tr, y_tr, x_val, y_val,batchsize, train_fn, val_fn,
-                     train_errs, train_accs, val_errs, val_accs,val_counter, logger, num_ims)
-        
-
-        
-        if epoch % 10 == 0 and epoch != 0:
-            plot_learn_curve(train_errs,val_errs,val_counter, 'err', save_plots=save_plots,path=save_path)
-            plot_learn_curve(train_accs,val_accs,val_counter, 'acc', save_plots=save_plots, path=save_path)
-
-            if epoch % 100 == 0 or epoch < 100:
-                pred_boxes, gt_boxes = box_fn(x_tr,y_tr)              
-                plot_ims_with_boxes(x_tr[inds], pred_boxes[inds], gt_boxes[inds], epoch=epoch,
-                                    save_plots=save_plots, path=save_path)
-
-            
-            
-            
+        tv.train_one_epoch()
+        tv.val_one_epoch()
+        if epoch % 10 == 0:
+            tv.plot_learn_curve()
+        #if epoch % 100
             
         
+        
+
+#             if epoch % 100 == 0 or epoch < 100:
+#                 pred_boxes, gt_boxes = box_fn(x_tr,y_tr)              
+#                 plot_ims_with_boxes(x_tr[inds], pred_boxes[inds], gt_boxes[inds], epoch=epoch,
+#                                     save_plots=save_plots, path=save_path)
+
+            
+            
+            
+            
+        
 
 
-        if save_weights and epoch % 10 == 0:
+#         if save_weights and epoch % 10 == 0:
   
-            np.savez('%s/model.npz'%(save_path), *lasagne.layers.get_all_param_values(network))
+#             np.savez('%s/model.npz'%(save_path), *lasagne.layers.get_all_param_values(network))
 
 
 
 
 if __name__=="__main__":
-    run_dir = create_run_dir()
-    xt,yt,xv,yv = load_precomputed_data()
-    train_fn, val_fn, box_fn, network, hyperparams = build_network(**{'num_filters': 10, 'num_fc_units': 10, 'num_extra_conv': 0})
-    print type(xt), type(yt)
-    for a,b in iterate_minibatches(xt, yt, 128, shuffle=False, num_ims=1000):
-        print type(a), a.shape, type(b), b.shape
-    train((xt,yt,xv,yv), network,
-          fns=(train_fn, val_fn, box_fn), 
-          num_epochs=3, 
-          num_ims=1000,
-          save_weights=False, 
-          save_plots=True, 
-          save_path=run_dir, 
-          batchsize=128, 
-          load_path=None)
+    pass
 
 
 
 
 
-
+def myit(n=10):
+    for i in range(n):
+        yield i
 

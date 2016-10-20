@@ -4,20 +4,12 @@ import matplotlib; matplotlib.use("agg")
 
 import os
 
-
-
 import sys
-
-
 
 from shutil import copyfile
 import imp
 
-
-
 #print os.getcwd()
-
-
 
 def create_run_dir(custom_rc=False):
     results_dir = os.getcwd() + '/results'

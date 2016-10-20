@@ -3,11 +3,13 @@ import matplotlib; matplotlib.use("agg")
 
 
 import lasagne
-from lasagne.layers import Conv2DLayer as conv
-from lasagne.layers import MaxPool2DLayer as maxpool
+from lasagne.layers import *
+
+from lasagne.layers import Conv2DLayer
+from lasagne.layers import MaxPool2DLayer
 from lasagne.layers import dropout
-from lasagne.layers import DenseLayer as fully_connected
-from lasagne.nonlinearities import rectify as relu
+from lasagne.layers import DenseLayer
+from lasagne.nonlinearities import rectify
 import theano
 from theano import tensor as T
 import sys
@@ -15,9 +17,11 @@ import numpy as np
 from copy import deepcopy
 #enable importing of notebooks
 import inspect
+from lasagne.nonlinearities import *
+from lasagne.objectives import *
 from helper_fxns import get_best_box, get_detec_loss, get_iou, make_test_data, get_detec_acc, get_final_box
-if __name__ == "__main__":
-    from data_loader import load_classification_dataset, load_detection_dataset
+#if __name__ == "__main__":
+    #from data_loader import load_classification_dataset, load_detection_dataset
 
 
 
@@ -29,10 +33,13 @@ def get_hyperparams(frame):
 
 
 
-def build_network(    input_shape=(None,8,96,96),
+def build_network(    input_shape=(1,16,768,1152),
+                      num_classes = 4,
                       filter_dim=3,
                       num_convpool=4,
-                      num_filters=512,
+                      scale_factor=64,
+                      num_filters=128,
+                      num_layers = 6,
                       num_fc_units=1024,
                       num_extra_conv=2, 
                       nonlinearity=lasagne.nonlinearities.LeakyRectify(0.1),
@@ -92,10 +99,10 @@ def build_network(    input_shape=(None,8,96,96),
         network = load_weights(load_path, network)
     
     #compile theano functions
-    train_fn, val_fn, box_fn = make_fns(network,input_var, target_var, coord_penalty, size_penalty, nonobj_penalty,
-                                        learning_rate, momentum, weight_decay, delta)
+    train_fn, val_fn, box_fn, pred_fn = make_fns(network,input_var, target_var, coord_penalty, size_penalty, nonobj_penalty,
+                                        learning_rate, momentum, weight_decay, delta,scale_factor)
     
-    return train_fn, val_fn, box_fn, network, hyperparams
+    return train_fn, val_fn, box_fn,pred_fn, network, hyperparams
 
 
 
@@ -105,48 +112,26 @@ def build_layers(input_var, **nk):
     
     '''total number of conv layers is num_convpool * (1 + num_extra_conv)'''
     
-
-    
-    
     filter_dim = nk['filter_dim']
-    assert filter_dim % 2 != 0, "filter dimensions must be odd to ensure x,y dim preservation in convolutions"
-    # convolution parameters that don't change the shape of the input
-    conv_kwargs = dict(num_filters=nk['num_filters'], filter_size=(filter_dim,filter_dim), pad=(filter_dim - 1)/2, 
-                       nonlinearity=nk['nonlinearity'], W=nk['w_init'])
+    base_num_filters = nk['num_filters']
+    num_layers = nk['num_layers']
+    num_filters = base_num_filters
     
-    extra_conv_kwargs = deepcopy(conv_kwargs)
-    extra_conv_kwargs.update({'num_filters': nk['num_filters'] / 2 })
-    
-    #shape: 8x8x96
     network = lasagne.layers.InputLayer(shape=nk['input_shape'], input_var=input_var)
     
+    for _ in range(num_layers):
+        network = Conv2DLayer(batch_norm(network), 
+                              num_filters=num_filters, 
+                              filter_size=nk['filter_dim'], 
+                              pad=nk['filter_dim'] / 2, stride=2, W=nk['w_init'])
+        num_filters *= 2
 
-    #shape: num_filters x 96 * 2^(-num_convpool) x 96 * 2^(-num_convpool)
-    for _ in range(nk['num_convpool']):
-        network = conv(network,**conv_kwargs )
-        
-        for _ in range(nk['num_extra_conv']):
-            network = conv(network,**extra_conv_kwargs)
-        
-        network = maxpool(network, pool_size=(2,2))
-        
     
+    coord_net = Conv2DLayer(batch_norm(network), num_filters=5, filter_size=1,W=nk['w_init'], nonlinearity=rectify)
+    
+    class_net = Conv2DLayer(batch_norm(network), num_filters=nk['num_classes'], filter_size=1,W=nk['w_init'], nonlinearity=sigmoid)
 
-    #shape: num_fc_units
-    network = fully_connected(dropout(network, p=nk['dropout_p']), num_units=nk['num_fc_units'], 
-                              nonlinearity=nk['nonlinearity'])  
-    
-    
-    grid_size, n_boxes, nclass = [nk[k] for k in ['grid_size', 'n_boxes', 'nclass']]
-    #shape: (grid_size * grid_size) * (n_boxes* 5 + nclass)  
-    network = fully_connected(dropout(network, p=nk['dropout_p']), 
-                                      num_units=(grid_size * grid_size) * (n_boxes* 5 + nclass),
-                                      nonlinearity=lasagne.nonlinearities.rectify)  
-                                      
-    
-    #shape: grid_size, grid_size,(n_boxes* 5 + nclass))
-    network = lasagne.layers.ReshapeLayer(network, shape=([0],grid_size, grid_size,(n_boxes* 5 + nclass)))
-                                
+    network = ConcatLayer([coord_net, class_net])  
     
     return network
         
@@ -163,11 +148,12 @@ def load_weights(file_path, network):
 
 
 
-def make_fns(network,input_var, det_target_var, lcxy, lchw, ln, learning_rate, momentum, weight_decay, delta):
+def make_fns(network,input_var, det_target_var, lcxy, lchw, ln, learning_rate, momentum, weight_decay, delta,scale_factor):
     '''Compiles theano train, test, box_fns'''
     #deterministic determines whether to use dropout or not in forward pass
-    test_prediction = lasagne.layers.get_output(network, deterministic=True)
-    prediction = lasagne.layers.get_output(network, deterministic=False)
+    #transpose output to match what loss expects
+    test_prediction = lasagne.layers.get_output(network, deterministic=True).transpose([0,2,3,1])
+    prediction = lasagne.layers.get_output(network, deterministic=False).transpose([0,2,3,1])
     
     
     def make_loss(pred):
@@ -182,10 +168,11 @@ def make_fns(network,input_var, det_target_var, lcxy, lchw, ln, learning_rate, m
         loss =  make_loss(prediction)
         weightsl2 = lasagne.regularization.regularize_network_params(network, lasagne.regularization.l2)
         params = lasagne.layers.get_all_params(network, trainable=True)
-        updates = lasagne.updates.nesterov_momentum(loss, 
-                                                    params, 
-                                                    learning_rate=learning_rate, 
-                                                    momentum=momentum)
+        updates = lasagne.updates.adam(loss, params,learning_rate=learning_rate)
+#         #updates = lasagne.updates.nesterov_momentum(loss, 
+#                                                     params, 
+#                                                     learning_rate=learning_rate, 
+#                                                     momentum=momentum)
         train_fn = theano.function([input_var, det_target_var], loss, updates=updates)
         return train_fn
         
@@ -200,8 +187,8 @@ def make_fns(network,input_var, det_target_var, lcxy, lchw, ln, learning_rate, m
     
     def make_box_fn():
         '''takes as input the input, target vars and outputs the predicted and the ground truth boxes)'''
-        pred_boxes = get_final_box(test_prediction)
-        gt_boxes = get_final_box(det_target_var)
+        pred_boxes = get_final_box(test_prediction,scale_factor=scale_factor)
+        gt_boxes = get_final_box(det_target_var,scale_factor=scale_factor)
         box_fn = theano.function([input_var, det_target_var], [pred_boxes, gt_boxes])
         return box_fn
     
@@ -216,12 +203,34 @@ def make_fns(network,input_var, det_target_var, lcxy, lchw, ln, learning_rate, m
     box_fn = make_box_fn()
     pred_fn = make_pred_fn()
     
-    return train_fn, test_or_val_fn, box_fn #,pred_fn
+    return train_fn, test_or_val_fn, box_fn ,pred_fn
 
 
 
 if __name__ == "__main__":
-    build_network()
+    train_fn, val_fn, box_fn,pred_fn, network, hyperparams = build_network(num_filters=2)
+
+    from netcdf_loader import bbox_iterator
+
+    for x,y in bbox_iterator(years=[1979], days=1):
+        x = np.squeeze(x,axis=2)
+        y = np.squeeze(y,axis=1)
+        pred = pred_fn(x)
+        print pred
+        print pred.shape
+        loss = train_fn(x,y)
+        vloss, acc = val_fn(x,y)
+        pred_box, gt_box =  box_fn(x,y)
+        print loss
+        print vloss
+        print acc
+        print pred_box
+        print gt_box
+        break
+
+
+
+
 
 
 

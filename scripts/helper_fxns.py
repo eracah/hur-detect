@@ -35,6 +35,7 @@ def get_iou(box1,box2):
 
 
 def get_best_box(tens):
+    #accepts tensor of n_ex,x,y,depth and returns best box for each example
     #assumes there is a box
     #TODO: If no box over a certain confidence, then don't output a box
     #TODO: Add NMS (non -maximal suppression)
@@ -55,8 +56,8 @@ def get_best_box(tens):
     best_xywhc = fl_ten[T.arange(fl_ten.shape[0]),best_ind,:]
     
     #convert xy coords of where on the grid back to separate x,y
-    xs = best_ind // tens.shape[1]
-    ys = best_ind % tens.shape[1]
+    xs = best_ind // tens.shape[2]
+    ys = best_ind % tens.shape[2]
     x = (xs + best_xywhc[:,0])
     y = (ys + best_xywhc[:,1])
     w = best_xywhc[:,2] * tens.shape[1]
@@ -64,6 +65,37 @@ def get_best_box(tens):
     coords = T.stack([x,y,w,h],axis=1)
     
     return coords
+
+
+
+# def get_best_box_np(tens):
+#     #get best box numpy way
+
+
+
+# t = T.arange(20)
+
+# b=T.stack(t[5:7], t[17:19], t[2:4], t[1:3], t[10:12], t[8:10],)
+
+# b.eval()
+
+# c =b.flatten()
+
+# c.eval()
+
+# i = T.arange(12)
+
+# i[(c > 6).nonzero()].eval()
+
+# g = T.raw_random
+
+# t=t.flatten()
+
+# t>3
+
+# i.eval()
+
+# i.eval()
 
 
 
@@ -175,15 +207,15 @@ def get_detec_loss(pred,gt, lcxy,lchw,ln, delta=0.00001):
 
     sterm4 = ln * raw_loss4
 
-    #only one class so no need here
-    #get the sum of squared diffs for prob vectors for the classes where there is an object in gt vs. pred
-#     s_p = T.square(tp_obj[:,ps] - tg_obj[:,ps])
 
-#     raw_loss5 = T.sum(s_p)
-#     sterm5 = raw_loss5
+    #get the cross entropy of these softmax vectors
+    s_p = T.nnet.categorical_crossentropy(tp_obj[:,ps], tg_obj[:,ps])
+
+    raw_loss5 = T.sum(s_p)
+    sterm5 = raw_loss5
 
     #adds up terms divides by number of examples in the batch
-    terms = (1. / nex) * (sterm1 + sterm2 + sterm3 + sterm4) #+ sterm5)
+    terms = (1. / nex) * (sterm1 + sterm2 + sterm3 + sterm4 + sterm5)
     return terms
 
 #     fterms = theano.function([pred, gt], terms)
