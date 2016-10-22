@@ -12,6 +12,199 @@ import pickle
 import os
 #enable importing of notebooks
 # from print_n_plot import plot_ims_with_boxes, add_bbox, plot_im_with_box
+from copy import deepcopy
+
+def get_boxes_ap(pred_tensor,y_tensor, conf_thresh, iou_thresh=0.5):
+    # gets two N x 9 x 12 x 18 tensors?
+    #return a float, and two lists of N dictionaries
+    # each dict has num_class keys pointing to a list of some number of box coords
+    #print pred_tensor.shape, y_tensor.shape
+    aps= []
+    predb_array = []
+    gt_array = []
+    for i in range(pred_tensor.shape[0]):
+        
+        pred_boxes, gt_boxes = get_boxes(pred_tensor[i], y_tensor[i], conf_thresh=conf_thresh)
+        #sort by confidence
+        for c in range(len(pred_boxes.keys())):
+            pred_boxes[c].sort(lambda a,b: -1 if a[4] > b[4] else 1)
+        ap = get_ap(pred_boxes, gt_boxes, thresh=iou_thresh)
+        aps.append(ap)
+        predb_array.append(pred_boxes)
+        gt_array.append(gt_boxes)
+    ap = np.mean(aps)
+    return ap, predb_array, gt_array
+    
+
+def get_boxes(pred_tensor, y_tensor, conf_thresh=0.7):
+    ''' pred_tensor is of shape: 5 + num_classes, x_g, y_g 
+        y_tensor is same shape'''
+    '''returns two dicts of the form
+         key (class), value: list of boxes with conf for that class'''
+    pred_boxes = get_boxes_from_tensor(pred_tensor, conf_thresh=conf_thresh)
+    
+    
+    gt_boxes = get_boxes_from_tensor(y_tensor, conf_thresh=1.0)
+    return pred_boxes, gt_boxes
+    
+    
+    
+    
+    
+
+def get_ap(pred_boxes,gt_boxes, num_classes=4, thresh=0.5, conf_thresh = 0.7):
+    '''pred boxes and gt_boxes is a dictionary key (class integer): value: list of boxes'''
+    chosen_boxes = []
+    wrong_chosen_boxes = []
+    z = {cl:[] for cl in range(num_classes)}
+    
+    #for each class
+    for c in range(num_classes):
+        #sort boxes by confidence for given class
+        #print pred_boxes[c]
+        pred_boxes[c].sort(lambda a,b: -1 if a[4] > b[4] else 1)
+        #print pred_boxes[c]
+        #grab boxes for that class
+        pc_boxes = pred_boxes[c]
+        gc_boxes = deepcopy(gt_boxes[c])
+        
+        #for each predicted box (in order from highest conf to lowest)
+        for pc_box in pc_boxes:
+            
+            #get all ious for that box with gt box
+            ious = np.asarray([iou(pc_box, gc_box) for gc_box in gc_boxes ])
+            # get all gt boxes that have iou with given box over the threshold
+            C = [ind for ind,gc_box in enumerate(gc_boxes) if ious[ind] > thresh ]
+            if len(C) > 0:
+                # if there are some gt ones that are over the threshold
+                # grab the highest one in terms of iou
+                max_ind = np.argmax(ious)
+                
+                # remove this box from consideration
+                del gc_boxes[max_ind]
+                #plop a true positive into the array
+                z[c].append(1)
+                #keep that box around
+                chosen_boxes.append(pc_box)
+            else:
+                z[c].append(0)
+                # keep that box around also?
+                wrong_chosen_boxes.append(pc_box)
+    
+    n = 0
+    tp = 0
+    for i in range(num_classes):
+        for j in range(len(z[i])):
+#             if pred_boxes[i][j][4] > conf_thresh:
+            n+=1
+            tp += z[i][j]
+
+    
+    avg_precision = float(tp) / n if n > 0 else 0.
+    return avg_precision
+            
+        #for pred_clsi_box in pred_clsi_boxes
+                
+    
+
+def get_boxes_from_tensor(tensor,scale_factor=64, xdim=768, ydim=1152, num_classes=4, conf_thresh=0.7):
+    #tensor is numpy tensor
+    x_g, y_g = tensor.shape[-2], tensor.shape[-1]
+    boxes = {cl:[] for cl in range(num_classes)}
+    
+    # pull out all box guesses
+    for i in range(x_g):
+        for j in range(y_g):
+            #print tensor.shape
+            coords = tensor[:5,i,j]
+            box = convert_coords_to_box(coords,i,j, x_g, y_g, scale_factor)
+            conf = coords[-1]
+            cls = np.argmax(tensor[5:,i,j]) # + 1 # cuz classes go from 1 to4
+            if conf >= conf_thresh:
+                boxes[cls].append(box)
+    
+            
+    return boxes
+            
+
+def convert_coords_to_box(coords, xind, yind, x_g, y_g, scale_factor):
+    
+    #print coords
+    xoff,yoff,w,h, conf = coords
+    
+    x,y = xind+ xoff, yind+ yoff
+    
+    x,y,w,h = [scale_factor * c for c in [x, y, x_g*w, y_g*h] ]
+    
+    return np.array([x,y,w,h,conf])
+
+def iou(box1,box2):
+    #box1 and box2 are numpy arrays
+    #boxes are expected in x_center, y_center, width, height format
+    x1,y1,w1,h1 = box1[:4]
+    x2,y2,w2,h2 = box2[:4]
+    #print w1,h1
+    #print w2,h2
+    xmin1, xmax1, ymin1, ymax1 = max(0, x1 - w1 / 2.), x1 + w1 /2., max(0,y1 - h1 / 2.), y1 + h1 /2.
+    xmin2, xmax2, ymin2, ymax2 = max(0,x2 - w2 / 2.), x2 + w2 /2,max(0,y2 - h2 / 2), y2 + h2 /2
+    inters = max(0,(min(xmax1,xmax2) - max(xmin1,xmin2)))   *                           max(0,(min(ymax1,ymax2) - max(ymin1,ymin2)) )
+    def get_area(box_mm):
+        xmin, xmax, ymin, ymax = box_mm
+        area = (xmax - xmin) * (ymax - ymin)
+#         if area == 0.0:
+#             print "aaaaaah", xmin, xmax, ymin, ymax
+        return area
+    union = get_area((xmin1, xmax1, ymin1, ymax1)) + get_area((xmin2, xmax2, ymin2, ymax2)) - inters                                                        
+    
+    return inters / float(union)
+
+
+
+def test(nclass=1):
+    pred_boxes = {cl:box_gen(8).tolist() for cl in range(nclass)}
+    gt_boxes = pred_boxes
+    gt_boxes = {cl:box_gen(1).tolist() for cl in range(nclass)}
+    #return gt_boxes
+    return calc_tpfp(pred_boxes,gt_boxes, num_classes=nclass)
+
+
+
+from matplotlib import pyplot as plt
+from matplotlib import patches
+def plot_boxes(pbox_dict=None, gbox_dict=None, nclass=1):
+    
+    f,sp = plt.subplots()
+    sp.imshow((np.zeros((15,15))))
+    for i in range(nclass):
+        for box in pbox_dict[i]:
+            add_bbox(sp, box[:4], color='r')
+        for box in gbox_dict[i]:
+            add_bbox(sp, box[:4], color='g')
+    pass
+    
+
+
+
+def add_bbox(subplot, bbox, color):
+    #box of form center x,y  w,h
+    x,y,w,h = bbox
+    subplot.add_patch(patches.Rectangle(
+    xy=(x - w / 2. , y - h / 2.),
+    width=w,
+    height=h, lw=2,
+    fill=False, color=color))
+
+
+
+def box_gen(num,xdim=15,ydim=15, maxhw=5):
+    xs = np.random.randint(0,xdim, size=(num,1))
+    ys = np.random.randint(0,ydim, size=(num,1))
+    hws = maxhw*np.ones((num,2))
+    conf = np.clip(np.random.normal(0.9,0.1,(num,1)),0.,1.)
+    boxes = np.hstack((xs,ys,hws,conf))
+    return boxes
+    
+    
 
 
 
@@ -31,123 +224,14 @@ def get_iou(box1,box2):
     return inters / union
 
 
-# 
-
-
-def get_best_box(tens):
-    #accepts tensor of n_ex,x,y,depth and returns best box for each example
-    #assumes there is a box
-    #TODO: If no box over a certain confidence, then don't output a box
-    #TODO: Add NMS (non -maximal suppression)
-    #Links for how do it:
-        #https://github.com/sunshineatnoon/Darknet.keras/blob/master/RunTinyYOLO.py#L107
-    #keep it simple right now. just get the best box
-    
-    #flatten x,y coords
-    fl_ten = tens.reshape((tens.shape[0],tens.shape[1] * tens.shape[2], tens.shape[3]))
-
-    #filter out boxes less than 0.6?
-    #fl_ten = fl_tens[:,:,4]
-    
-    #get best xy coord for each example
-    best_ind = T.argmax(fl_ten[:,:,4], axis=1)
-
-    #get x,y,w,h,conf from best one xy coord from each exampe
-    best_xywhc = fl_ten[T.arange(fl_ten.shape[0]),best_ind,:]
-    
-    #convert xy coords of where on the grid back to separate x,y
-    xs = best_ind // tens.shape[2]
-    ys = best_ind % tens.shape[2]
-    x = (xs + best_xywhc[:,0])
-    y = (ys + best_xywhc[:,1])
-    w = best_xywhc[:,2] * tens.shape[1]
-    h = best_xywhc[:,3] * tens.shape[2]
-    coords = T.stack([x,y,w,h],axis=1)
-    
-    return coords
-
-
-
-# def get_best_box_np(tens):
-#     #get best box numpy way
-
-
-
-# t = T.arange(20)
-
-# b=T.stack(t[5:7], t[17:19], t[2:4], t[1:3], t[10:12], t[8:10],)
-
-# b.eval()
-
-# c =b.flatten()
-
-# c.eval()
-
-# i = T.arange(12)
-
-# i[(c > 6).nonzero()].eval()
-
-# g = T.raw_random
-
-# t=t.flatten()
-
-# t>3
-
-# i.eval()
-
-# i.eval()
-
-
-
-def get_final_box(tens, scale_factor=16):
-    coords = get_best_box(tens)
-    return coords * scale_factor
-    
-
-
-
-def nms(boxes):
-    pass
-
-
-
-def make_test_data(nclass = 1, grid_y = 6, grid_x = 6, n_bound_box = 1, n_ex = 10,max_objs_per_image = 1 ):
-    #make test data
-    xi, yi, wi, hi, Ci,pi = range(5) + [range(5,5 + nclass)]
-    n_channels = n_bound_box * 5 + nclass
-    #xi, yi, wi, hi, Ci=[[k + (5*i) for i in range(n_bound_box)] for k in range(5)]
-
-    #pi = range(n_channels - nclass, n_channels)
-
-
-
-    p = np.random.random((n_ex,grid_y,grid_x,n_channels))
-
-    g = np.zeros((n_ex,grid_y,grid_x,n_channels))
-    for ex in g:
-
-        n_objs_in_image = 1 #np.random.randint(1,max_objs_per_image,1)[0]
-        r = np.random.randint(0,grid_y,n_objs_in_image * 2)
-        for i in range(n_objs_in_image):
-            coords = np.random.random(4)
-            c = np.random.randint(0,nclass,1)[0]
-            ex[r[2*i],r[2*i + 1],pi[c]] = 1.
-            ex[r[2*i],r[2*i + 1],Ci] = 1.
-            ex[r[2*i],r[2*i + 1],:Ci] = coords
-    #         for j in range(n_bound_box):
-    #             ex[r[2*i],r[2*i + 1],Ci[j]] = 1.
-    #             ex[r[2*i],r[2*i + 1],(0 if j ==0 else Ci[j-1]+1):Ci[j]] = coords
-    return g,p
-
-
 
 def get_detec_loss(pred,gt, lcxy,lchw,ln, delta=0.00001):
     #TODO add in multiple bbox behavior
-    
+    #pred is n_ex, [x,y,w,h,c,classes], x, y
     #get number of examples and the indices of the tesnor 
     #to where x,y coirrds height width and confidence go
-    #print pred.shape.eval()
-    #print gt.shape.eval()
+    pred = pred.transpose((0,2,3,1))
+    gt = gt.transpose((0,2,3,1))
     nex = pred.shape[0]
     cinds = T.arange(5)
     
@@ -180,8 +264,8 @@ def get_detec_loss(pred,gt, lcxy,lchw,ln, delta=0.00001):
     #term2
 
     #get sum of squared diff of the of heights and widths b/w pred and gt normalized by squared heights and widths of gt 
-    s_w = T.square((tp_obj[:,ws] - tg_obj[:,ws])) / T.square(tg_obj[:,ws])
-    s_h = T.square((tp_obj[:,hs] - tg_obj[:,hs])) / T.square(tg_obj[:,hs])
+    s_w = T.square((tp_obj[:,ws] - tg_obj[:,ws])) #/ T.square(tg_obj[:,ws])
+    s_h = T.square((tp_obj[:,hs] - tg_obj[:,hs])) #/ T.square(tg_obj[:,hs])
     raw_loss2 = T.sum(s_w + s_h)
 
     sterm2 = lchw * raw_loss2
@@ -225,15 +309,41 @@ def get_detec_loss(pred,gt, lcxy,lchw,ln, delta=0.00001):
 # print fterms(p,g)
 
 
+# 
 
-def get_detec_acc(pred,gt):
-    pbox = get_best_box(pred)
-    gbox = get_best_box(gt)
-    #TODO make this elementwise
-    results, updates = theano.scan(fn=lambda b1,b2: get_iou(b1,b2), sequences=[pbox,gbox])
-    mean_iou = T.mean(results)
-    return mean_iou
-    
+
+def nms(boxes):
+    pass
+
+
+
+def make_test_data(nclass = 1, grid_y = 6, grid_x = 6, n_bound_box = 1, n_ex = 10,max_objs_per_image = 1 ):
+    #make test data
+    xi, yi, wi, hi, Ci,pi = range(5) + [range(5,5 + nclass)]
+    n_channels = n_bound_box * 5 + nclass
+    #xi, yi, wi, hi, Ci=[[k + (5*i) for i in range(n_bound_box)] for k in range(5)]
+
+    #pi = range(n_channels - nclass, n_channels)
+
+
+
+    p = np.random.random((n_ex,grid_y,grid_x,n_channels))
+
+    g = np.zeros((n_ex,grid_y,grid_x,n_channels))
+    for ex in g:
+
+        n_objs_in_image = 1 #np.random.randint(1,max_objs_per_image,1)[0]
+        r = np.random.randint(0,grid_y,n_objs_in_image * 2)
+        for i in range(n_objs_in_image):
+            coords = np.random.random(4)
+            c = np.random.randint(0,nclass,1)[0]
+            ex[r[2*i],r[2*i + 1],pi[c]] = 1.
+            ex[r[2*i],r[2*i + 1],Ci] = 1.
+            ex[r[2*i],r[2*i + 1],:Ci] = coords
+    #         for j in range(n_bound_box):
+    #             ex[r[2*i],r[2*i + 1],Ci[j]] = 1.
+    #             ex[r[2*i],r[2*i + 1],(0 if j ==0 else Ci[j-1]+1):Ci[j]] = coords
+    return g,p
 
 
 

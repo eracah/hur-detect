@@ -66,16 +66,17 @@ import pandas as pd
 
 
 
-gbdl = "/project/projectdirs/dasrepo/gordon_bell/deep_learning/"
-imdir = gbdl + "data/climate/CAM5_0.25/climo/big_images/"
+# gbdl = "/project/projectdirs/dasrepo/gordon_bell/deep_learning/"
+# imdir = gbdl + "data/climate/CAM5_0.25/climo/big_images/"
+
+gbdl = "/storeSSD/eracah/nersc/data/"
+imdir = "/storeSSD/cbeckham/nersc/big_images/1979/"
+#ds = nc.Dataset(join(imdir,"netcdf_files", "cam5_1_amip_run2.cam2.h2.1984-09-06-00000.nc"))
+metadatadir = join(gbdl, "teca_metadata")
 
 
-ds = nc.Dataset(join(imdir,"netcdf_files", "cam5_1_amip_run2.cam2.h2.1984-09-06-00000.nc"))
-metadatadir = join(imdir, "teca_metadata")
 
-
-
-def make_labels_for_dataset(fname, time_steps=8):
+def make_labels_for_dataset(fname, metadata_dir, time_steps=8):
     '''takes in string for fname and the number of time_steps and outputs
     a time_steps by maximages by 5 tensor encoding the coordinates and class of each event in a time step'''
    
@@ -87,7 +88,7 @@ def make_labels_for_dataset(fname, time_steps=8):
     bboxes = np.zeros((time_steps, maximagespertimestep, 5))
     event_counter = np.zeros((time_steps,))
     for weather_type in weather_types:
-        selectdf = match_nc_to_csv(fname, weather_type)
+        selectdf = match_nc_to_csv(fname, metadata_dir, weather_type)
     
         timelist=set(selectdf["time_step"])
         for t in timelist:
@@ -109,15 +110,15 @@ def make_labels_for_dataset(fname, time_steps=8):
 
 
 
-def match_nc_to_csv(fname, weather_type, inc_csv=False):
+def match_nc_to_csv(fname,metadata_dir,weather_type, inc_csv=False):
     coord_keys = ["xmin", "xmax", "ymin", "ymax"]
     ts=get_timestamp(fname)
 
     if weather_type == 'us-ar':
-        labeldf = pd.read_csv(join(metadatadir, weather_type, 'ar_labels.csv'))
+        labeldf = pd.read_csv(join(metadata_dir, 'ar_labels.csv'))
         tmplabeldf=labeldf.ix[ (labeldf.month==ts.month) & (labeldf.day==ts.day) & (labeldf.year==ts.year) ].copy()
     else:
-        labeldf = pd.read_csv(join(metadatadir, weather_type, str(ts.year), 'labels.csv'))
+        labeldf = pd.read_csv(join(metadata_dir, '_'.join([str(ts.year),weather_type, 'labels.csv'])))
         tmplabeldf=labeldf.ix[ (labeldf.month==ts.month) & (labeldf.day==ts.day) ].copy()
     
     
@@ -198,7 +199,7 @@ def test_grid(bbox, grid, xdim, ydim, scale_factor,num_classes, caffe_format=Fal
 
 
 
-def create_detection_gr_truth(xdim, ydim, scale_factor, bbox_tensor, num_classes, caffe_format=False):
+def create_detection_gr_truth(xdim, ydim, scale_factor, bbox_tensor, num_classes):
     #x_xy : 1,2 tuple with x and y sizes for image
     #scale_factor: factor to scale xy size by fro gr_truth grid for YOLO
     #scale_factor = float(scale_factor)
@@ -207,16 +208,15 @@ def create_detection_gr_truth(xdim, ydim, scale_factor, bbox_tensor, num_classes
     # bbox_tensor = make_labels_for_dataset("cam5_1_amip_run2.cam2.h2.1984-01-03-00000.nc")
     # num_classes = 4 
 
-
+    scale_factor = float(scale_factor)
     bbox_classes = bbox_tensor[:,:,4]
     bbox_coords = bbox_tensor[:,:,:4]
-
 
     #make sure xy coords divide cleanly with scale_factor
     assert xdim % scale_factor == 0 and ydim % scale_factor == 0, "scale factor %i must divide the xy (%i, %i) coords cleanly " %(scale_factor,xdim, ydim)
 
 
-    x_len,y_len = xdim / scale_factor, ydim / scale_factor
+    x_len,y_len = xdim / int(scale_factor), ydim / int(scale_factor)
     last_dim = 5 + num_classes #x,y,w,h,c plus num_classes for one hot encoding
 
 
@@ -226,7 +226,9 @@ def create_detection_gr_truth(xdim, ydim, scale_factor, bbox_tensor, num_classes
 
     #each coordinate goes at index i,j in the 6x6 array, where i,j are the coordinates of the
     #lower left corner of the grid that center of the box (in 6x6 space ) falls on
-    inds = np.floor(bb_scaled[:,:,:2]).astype('int')
+    #subtract eps so we dont't have one off error
+    eps = np.finfo(float).eps
+    inds = np.floor(bb_scaled[:,:,:2]-10*eps).astype('int')
 
     #xywh where x and y are offset from lower left corner of grid thay are in [0,1] and w and h
     # are what fraction the width and height of bboxes are of the total width and total height of the image
@@ -242,10 +244,10 @@ def create_detection_gr_truth(xdim, ydim, scale_factor, bbox_tensor, num_classes
 
 
     #make gr_truth which is 
-    if caffe_format:
-        gr_truth = np.zeros((bbox_coords.shape[0],last_dim, x_len, y_len ))
-    else:
-        gr_truth = np.zeros((bbox_coords.shape[0], x_len,y_len,last_dim))
+
+    gr_truth = np.zeros((bbox_coords.shape[0],last_dim, x_len, y_len ))
+#     else:
+#         gr_truth = np.zeros((bbox_coords.shape[0], x_len,y_len,last_dim))
 
 
     #sickens me to a do a for loop here, but numpy ain't cooperating
@@ -255,35 +257,35 @@ def create_detection_gr_truth(xdim, ydim, scale_factor, bbox_tensor, num_classes
     # we assume one box per image here
     # for each grid point that is center of image plop in center, and width and height and class
     for i in range(gr_truth.shape[0]):
-        if caffe_format:
-            #put coordinates
-            gr_truth[i, :4,inds[i,0], inds[i,1]] = xywh[i]
+        #put coordinates, conf and class for all events (now there are multiple)
+        for j, coords in enumerate(xywh[i]):
+
+
+            # the index into the groudn truth grid where class should go
+            xind, yind = inds[i,j,0], inds[i,j,1]
+            gr_truth[i, :4, xind,yind,] = coords
 
             #put in confidence
-            gr_truth[i, 4, inds[i,0], inds[i,1]] = 1 if np.sum(xywh[i]) > 0. else 0.
+            gr_truth[i,4,xind,yind] = 1 if bbox_classes[i,j] > 0. else 0.
 
             #put in class label
-            gr_truth[i, 5, inds[i,0], inds[i,1]] = 1 if np.sum(xywh[i]) > 0. else 0.
-
-            gr_truth[i,6, inds[i,0], inds[i,1]] = 0. if np.sum(xywh[i]) > 0. else 1.
-
-        else:
-            #put coordinates, conf and class for all events (now there are multiple)
-            for j, coords in enumerate(xywh[i]):
-
-
-                # the index into the groudn truth grid where class should go
-                xind, yind = inds[i,j,0], inds[i,j,1]
-
-                gr_truth[i,xind,yind, :4] = coords
-
-                #put in confidence
-                gr_truth[i,xind,yind, 4] = 1 if bbox_classes[i,j] > 0. else 0.
-
-                #put in class label
-                gr_truth[i,xind,yind, 4 + int(bbox_classes[i,j])] = 1. if bbox_classes[i,j] > 0. else 0.
+            gr_truth[i, 4 + int(bbox_classes[i,j]),xind,yind] = 1. if bbox_classes[i,j] > 0. else 0.
 
     return gr_truth
+
+
+
+
+def make_yolo_masks_for_dataset(camfile_name,metadata_dir="/storeSSD/eracah/data/teca_metadata/", xdim=768, ydim=1152,time_steps=8, classes=4):
+    
+    labels_tensor = make_labels_for_dataset(camfile_name,metadata_dir, time_steps)
+    labels_tensor = convert_bbox_minmax_to_cent_xywh(labels_tensor)
+
+
+    yolo_mask = create_detection_gr_truth(xdim,ydim,scale_factor=64.,bbox_tensor = labels_tensor, num_classes=classes)
+    
+    #masks is an 8,num_classes, 768, 1152 mask 0's everywhere except where class is
+    return yolo_mask
 
 
 
@@ -310,32 +312,7 @@ def make_spatiotemporal_tensor(dataset,num_time_slices, variables, x=768, y=1152
 
 
 
-
-    
-def make_masks_for_dataset(dataset, time_steps, classes=2):
-    labels_list = make_labels_for_dataset(dataset, time_steps)
-    x, y = dataset['TMQ'][0].shape
-    masks = np.zeros((time_steps, classes, x ,y))
-    bg = np.ones((time_steps, 1, x ,y))
-    for time_step, labels in enumerate(labels_list):
-        
-        for label in labels:
-            cls = label[-1]
-            x_slice = slice(label[0],label[1])
-            y_slice = slice(label[2], label[3])
-            masks[time_step, cls, y_slice,  x_slice] = 1
-            bg[time_step, 0,y_slice, x_slice] = 0
-    masks = np.concatenate((masks, bg), axis=1).reshape(time_steps, classes+1, x ,y)
-    #masks is an 8,num_classes, 768, 1152 mask 0's everywhere except where class is
-    return masks
-
-
-                
-                
-
-
-
-def _day_iterator(years=[1979], data_dir="/project/projectdirs/dasrepo/gordon_bell/climate/data/big_images/",
+def _day_iterator(years=[1979], metadata_dir="/storeSSD/eracah/data/teca_metadata/", data_dir="/project/projectdirs/dasrepo/gordon_bell/climate/data/big_images/",
                   shuffle=False, days=365, time_steps=8, classes=2, labels_only=True):
     """
     This iterator will return a pair of  tensors:
@@ -369,18 +346,17 @@ def _day_iterator(years=[1979], data_dir="/project/projectdirs/dasrepo/gordon_be
     
     camfiles.sort()
     camfiles = camfiles[:days]
-    print camfiles
     
     if shuffle:
         np.random.shuffle(camfiles)
-        sys.stderr.write("warning: shuffling camfiles in _day_iterator()\n")
+        #sys.stderr.write("warning: shuffling camfiles in _day_iterator()\n")
     for camfile in camfiles:
         dataset = nc.Dataset(maindir+'/'+camfile, "r", format="NETCDF4")
         x=768
         y=1152
         day_slice = make_spatiotemporal_tensor(dataset,time_steps,variables) #one day slice per dataset
         tr_data = day_slice.reshape(time_steps,len(variables), x, y)
-        masks = make_yolo_masks_for_dataset(camfile,xdim=768, ydim=1152,time_steps=8, classes=classes)
+        masks = make_yolo_masks_for_dataset(camfile,metadata_dir=metadata_dir, xdim=768, ydim=1152,time_steps=8, classes=classes)
         if labels_only:
             # we assume labels are evn time steps here
             tr_data = tr_data[[0,2,4,6]]
@@ -393,6 +369,7 @@ def _day_iterator(years=[1979], data_dir="/project/projectdirs/dasrepo/gordon_be
 
 def data_iterator(batch_size,
                   data_dir="/project/projectdirs/dasrepo/gordon_bell/deep_learning/data/climate/big_images/",
+                  metadata_dir="/storeSSD/eracah/data/teca_metadata/",
                   time_chunks_per_example=8,
                   shuffle=False,
                   days=365,
@@ -407,7 +384,7 @@ def data_iterator(batch_size,
     '''
     # for each day (out of 365 days)
     day=0
-    for tensor, masks in _day_iterator(years=years,data_dir=data_dir,
+    for tensor, masks in _day_iterator(years=years,data_dir=data_dir,metadata_dir=metadata_dir,
                                        shuffle=shuffle,classes=classes,days=days, 
                                        time_steps=time_steps,
                                        labels_only=labels_only):  #tensor is 8,16,768,1152
@@ -463,31 +440,21 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
 
 def bbox_iterator(years,days,
                   batch_size = 1,
-                  data_dir="/project/projectdirs/dasrepo/gordon_bell/deep_learning/data/climate/CAM5_0.25/climo/big_images/netcdf_files/", 
+                  data_dir="/storeSSD/cbeckham/nersc/big_images/1979/", 
+                  metadata_dir="/storeSSD/eracah/data/teca_metadata/",
                 shuffle=False, classes=4, labels_only=True, time_chunks_per_example=1 ):
     
     """years: list of years,
         days: number of days
         classes: number of classes
         labels_only: -> if true -> only does images with labels"""
-    for x,y in data_iterator(years=years,batch_size=1, data_dir=data_dir, time_chunks_per_example=time_chunks_per_example,
+    for x,y in data_iterator(years=years,batch_size=batch_size, data_dir=data_dir, metadata_dir=metadata_dir, time_chunks_per_example=time_chunks_per_example,
                   shuffle=shuffle,days=days, classes=classes, labels_only=labels_only):
 
             x, y = np.swapaxes(x, 1, 2), y
             y = y.astype("float32")
             yield x, y
             
-            
-def make_yolo_masks_for_dataset(camfile_name,xdim=768, ydim=1152,time_steps=8, classes=4):
-    
-    labels_tensor = make_labels_for_dataset(camfile_name, time_steps)
-    labels_tensor = convert_bbox_minmax_to_cent_xywh(labels_tensor)
-
-
-    yolo_mask = create_detection_gr_truth(xdim,ydim,scale_factor=64,bbox_tensor = labels_tensor, num_classes=classes)
-    
-    #masks is an 8,num_classes, 768, 1152 mask 0's everywhere except where class is
-    return yolo_mask
 
 
 
@@ -504,45 +471,16 @@ def convert_coord_tens_to_box(coord_tens, xind, yind, scale_factor, xdim=768,ydi
 
 
 
-# def get_best_box(tens):
-#     #accepts tensor of n_ex,x,y,depth and returns best box for each example
-#     #assumes there is a box
-#     #TODO: If no box over a certain confidence, then don't output a box
-#     #TODO: Add NMS (non -maximal suppression)
-#     #Links for how do it:
-#         #https://github.com/sunshineatnoon/Darknet.keras/blob/master/RunTinyYOLO.py#L107
-#     #keep it simple right now. just get the best box
-    
-#     #flatten x,y coords
-#     fl_ten = tens.reshape((tens.shape[0],tens.shape[1] * tens.shape[2], tens.shape[3]))
-
-#     #filter out boxes less than 0.6?
-#     #fl_ten = fl_tens[:,:,4]
-    
-    
-    
-#     #get best xy coord for each example
-#     best_ind = T.argmax(fl_ten[:,:,4], axis=1)
-
-#     #get x,y,w,h,conf from best one xy coord from each exampe
-#     best_xywhc = fl_ten[T.arange(fl_ten.shape[0]),best_ind,:]
-    
-#     #convert xy coords of where on the grid back to separate x,y
-#     xs = best_ind // tens.shape[2]
-#     ys = best_ind % tens.shape[2]
-#     x = (xs + best_xywhc[:,0])
-#     y = (ys + best_xywhc[:,1])
-#     w = best_xywhc[:,2] * tens.shape[1]
-#     h = best_xywhc[:,3] * tens.shape[2]
-#     coords = T.stack([x,y,w,h],axis=1)
-    
-#     return coords
-
-
-
 if __name__ == '__main__':
-    for x,y in bbox_iterator(years=[1979], days=1, labels_only=False, time_chunks_per_example=8):
+    dir_kwargs = dict(data_dir="/storeSSD/eracah/data/netcdf_ims/", metadata_dir="/storeSSD/eracah/data/metadata")
+    tr_kwargs = dict(years=[1979], days=5)
+    tr_kwargs.update(dir_kwargs)
+    val_kwargs= dict(years=[1979], days=2)
+    val_kwargs.update(dir_kwargs)
+    print tr_kwargs
+    for x,y in bbox_iterator(**tr_kwargs):
         print x.shape, y.shape
+        
     
         
 
