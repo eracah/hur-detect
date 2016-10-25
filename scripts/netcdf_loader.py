@@ -440,16 +440,16 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
 
 def bbox_iterator(years,days,
                   batch_size = 1,
-                  data_dir="/storeSSD/cbeckham/nersc/big_images/1979/", 
-                  metadata_dir="/storeSSD/eracah/data/teca_metadata/",
-                shuffle=False, classes=4, labels_only=True, time_chunks_per_example=1 ):
+                  data_dir="/storeSSD/eracah/data/netcdf_ims/", 
+                  metadata_dir="/storeSSD/eracah/data/metadata/",
+                shuffle=False, num_classes=4, labels_only=True, time_chunks_per_example=1 ):
     
     """years: list of years,
         days: number of days
         classes: number of classes
         labels_only: -> if true -> only does images with labels"""
     for x,y in data_iterator(years=years,batch_size=batch_size, data_dir=data_dir, metadata_dir=metadata_dir, time_chunks_per_example=time_chunks_per_example,
-                  shuffle=shuffle,days=days, classes=classes, labels_only=labels_only):
+                  shuffle=shuffle,days=days, classes=num_classes, labels_only=labels_only):
 
             x, y = np.swapaxes(x, 1, 2), y
             y = y.astype("float32")

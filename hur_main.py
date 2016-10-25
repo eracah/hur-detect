@@ -7,8 +7,8 @@ import os
 import matplotlib
 import argparse
 import numpy as np
-
-
+from lasagne.nonlinearities import *
+from lasagne.init import *
 
 '''before we import theano anywhere else we want to make sure we specify 
 a unique directory for compiling, so we dont get into a locking issue
@@ -20,6 +20,47 @@ from scripts.train_val import train
 from scripts.print_n_plot import plot_ims_with_boxes
 from scripts.build_network import build_network
 from scripts.netcdf_loader import bbox_iterator
+from scripts.helper_fxns import setup_logging
+
+
+
+default_args = {                  'learning_rate': 0.0001,
+                                  'num_tr_days': 2,
+                                  'input_shape': (None,16,768,1152),
+                                  'dropout_p': 0, 
+                                  'weight_decay': 0.0005, 
+                                  'num_filters': 2, 
+                                  'num_layers': 1,
+                                  'num_extra_conv': 0,
+                                  'momentum': 0.9,
+                                  'lambda_ae' : 10,
+                                  'coord_penalty': 5,
+                                  'size_penalty': 5,
+                                  'nonobj_penalty': 0.5,
+                                  'iou_thresh' : 0.5,
+                                  'conf_thresh': 0.7,
+                                  'shuffle': True,
+                                  'num_fc_units': "None",
+                                  'metadata_dir': "/storeSSD/eracah/data/metadata/",
+                                  'data_dir': "/storeSSD/eracah/data/netcdf_ims",
+                                  'batch_size' : 1,
+                                  'ae_weight': 0.0,
+                                  'epochs': 10000,
+                                  'tr_years': [1979, 1980,1981],
+                                  'val_years': [1982],
+                                  'save_weights': True,
+                                  'num_classes': 4,
+                                  'labels_only': True,
+                                  'time_chunks_per_example': 1,
+                                  'filter_dim':5,
+                                  'scale_factor': 64,
+                                  'nonlinearity': LeakyRectify(0.1),
+                                  'w_init': HeUniform(),
+                                  "batch_norm" : False,
+                                  "load_path": "None" # "/storeSSD/cbeckham/nersc/models/output/full_image_1/12.model"
+                
+                                  
+                    }
 
 
 
@@ -28,90 +69,36 @@ if any(["jupyter" in arg for arg in sys.argv]):
     sys.argv=sys.argv[:1]
     
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-e', '--epochs', type=int, default=10000,
-    help='number of epochs for training')
-
-parser.add_argument('-d', '--data_path', type=str, default="/storeSSD/eracah/data/netcdf_ims",
-    help='path to data')
-
-parser.add_argument('-m', '--metadata_path', type=str, default="/storeSSD/eracah/data/metadata/",
-    help='path to data')
-
-parser.add_argument('-l', '--learn_rate', default=0.00001, type=float,
-    help='the learning rate for the network')
-
-parser.add_argument('-n', '--num_ims', default=2, type=int,
-    help='number of total images')
-
-parser.add_argument('-f', '--num_filters', default=2, type=int,
-    help='number of filters in each conv layer')
-
-parser.add_argument( '--fc', default=512, type=int,
-    help='number of fully connected units')
-
-parser.add_argument('--coord_penalty', default=5, type=int,
-    help='penalty for guessing coordinates wrong')
-
-parser.add_argument('--size_penalty', default=5, type=int,
-    help='penalty for guessing height or width wrong')
-
-parser.add_argument('--nonobj_penalty', default=0.5, type=float,
-    help='penalty for guessing an object where one isnt')
-
-parser.add_argument('-c','--num_extra_conv', default=0, type=int,
-    help='conv layers to add on to each conv layer before max pooling')
-parser.add_argument('-b','--batch_size', default=1, type=int,
-    help='batch size')
-
-parser.add_argument('--num_convpool', default=4, type=int,
-    help='number of conv layer-pool layer pairs')
-
-parser.add_argument('--momentum', default=0.9, type=float,
-    help='momentum')
-
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+for k,v in default_args.iteritems():
+    parser.add_argument('--' + k, type=type(v), default=v, help=k)
 
 args = parser.parse_args()
 
 
 
 run_dir = create_run_dir()
-print run_dir
-
-
 
 '''set params'''
-network_kwargs = {'learning_rate': args.learn_rate, 
-                  'input_shape': (None,16,768,1152),
-                  'dropout_p': 0, 
-                  'weight_decay': 0.0005, 
-                  'num_filters': args.num_filters, 
-                  'num_fc_units': args.fc, 
-                  'num_convpool': args.num_convpool,
-                  'num_extra_conv': args.num_extra_conv,
-                  'momentum': args.momentum,
-                  'coord_penalty': args.coord_penalty,
-                  'nonobj_penalty': args.nonobj_penalty,
-                   }
+kwargs = default_args
+kwargs.update(args.__dict__)
+kwargs['num_val_days'] = int(np.ceil(0.2*kwargs['num_tr_days']))
+kwargs['save_path'] = run_dir
+
+'''save hyperparams'''
+dump_hyperparams(kwargs,run_dir)
+
+kwargs["logger"] = setup_logging(kwargs['save_path'])
 
 
-dir_kwargs = dict(data_dir=args.data_path, metadata_dir=args.metadata_path, shuffle=True, batch_size=args.batch_size)
-tr_kwargs = dict(years=[1979, 1980,1981], days=args.num_ims)
-tr_kwargs.update(dir_kwargs)
-val_kwargs= dict(years=[1982,1983,1984,1985,1986], days=int(np.ceil(0.2*args.num_ims)))
-val_kwargs.update(dir_kwargs)
 
 '''get network and train_fns'''
-train_fn, val_fn,pred_fn, ap_box_fn, network, hyperparams = build_network(**network_kwargs)
-
-hyperparams.update({'num_ims': args.num_ims, 'tr_size': args.num_ims})
-'''save hyperparams'''
-dump_hyperparams(hyperparams, path=run_dir)
+fns, networks = build_network(kwargs)
 
 
 
 '''train'''
-train(bbox_iterator,tr_kwargs,val_kwargs, network=network, fns=(train_fn, val_fn, ap_box_fn), save_weights=True, num_epochs=args.epochs, save_path=run_dir)
+train(bbox_iterator, kwargs, networks, fns)
 
 
 

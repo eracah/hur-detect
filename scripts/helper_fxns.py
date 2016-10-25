@@ -14,37 +14,43 @@ import os
 # from print_n_plot import plot_ims_with_boxes, add_bbox, plot_im_with_box
 from copy import deepcopy
 
-def get_boxes_ap(pred_tensor,y_tensor, conf_thresh, iou_thresh=0.5):
+def get_MAP(pred_tensor,y_tensor, conf_thresh, iou_thresh, num_classes):
     # gets two N x 9 x 12 x 18 tensors?
     #return a float, and two lists of N dictionaries
     # each dict has num_class keys pointing to a list of some number of box coords
     #print pred_tensor.shape, y_tensor.shape
-    aps= []
-    predb_array = []
-    gt_array = []
+    tot_ap = 0
     for i in range(pred_tensor.shape[0]):
         
-        pred_boxes, gt_boxes = get_boxes(pred_tensor[i], y_tensor[i], conf_thresh=conf_thresh)
-        #sort by confidence
-        for c in range(len(pred_boxes.keys())):
-            pred_boxes[c].sort(lambda a,b: -1 if a[4] > b[4] else 1)
-        ap = get_ap(pred_boxes, gt_boxes, thresh=iou_thresh)
-        aps.append(ap)
-        predb_array.append(pred_boxes)
-        gt_array.append(gt_boxes)
-    ap = np.mean(aps)
-    return ap, predb_array, gt_array
+        pred_boxes, gt_boxes = get_boxes(pred_tensor[i], y_tensor[i], conf_thresh=conf_thresh, num_classes=num_classes)
+        ap = get_ap(pred_boxes, gt_boxes, thresh=iou_thresh, num_classes=num_classes)
+        tot_ap += ap
+    MAP = tot_ap / pred_tensor.shape[0]
+    return MAP
     
-
-def get_boxes(pred_tensor, y_tensor, conf_thresh=0.7):
+def get_all_boxes(pred_tensor,y_tensor, conf_thresh, num_classes):
+    all_gt_boxes = []
+    all_pred_boxes = []
+    for i in range(pred_tensor.shape[0]):
+        pred_boxes, gt_boxes = get_boxes(pred_tensor[i], y_tensor[i], 
+                                         conf_thresh=conf_thresh, 
+                                         num_classes=num_classes)
+        all_gt_boxes.append(gt_boxes)
+        all_pred_boxes.append(pred_boxes)
+    return all_pred_boxes, all_gt_boxes
+        
+        
+def get_boxes(pred_tensor, y_tensor, conf_thresh=0.7, num_classes=4):
     ''' pred_tensor is of shape: 5 + num_classes, x_g, y_g 
         y_tensor is same shape'''
     '''returns two dicts of the form
          key (class), value: list of boxes with conf for that class'''
-    pred_boxes = get_boxes_from_tensor(pred_tensor, conf_thresh=conf_thresh)
+    pred_boxes = get_boxes_from_tensor(pred_tensor, conf_thresh=conf_thresh, num_classes=num_classes)
+    #sort by confidence
+    for c in range(len(pred_boxes.keys())):
+            pred_boxes[c].sort(lambda a,b: -1 if a[4] > b[4] else 1)
     
-    
-    gt_boxes = get_boxes_from_tensor(y_tensor, conf_thresh=1.0)
+    gt_boxes = get_boxes_from_tensor(y_tensor, conf_thresh=1.0,num_classes=num_classes)
     return pred_boxes, gt_boxes
     
     
@@ -169,6 +175,85 @@ def test(nclass=1):
 
 
 
+def get_detec_loss(pred, gt, kwargs):
+    #TODO add in multiple bbox behavior
+    #pred is n_ex, [x,y,w,h,c,classes], x, y
+    #get number of examples and the indices of the tesnor 
+    #to where x,y coirrds height width and confidence go
+    pred = pred.transpose((0,2,3,1))
+    gt = gt.transpose((0,2,3,1))
+    nex = pred.shape[0]
+    cinds = T.arange(5)
+    
+    #x coord indices, y coord indices, width, height, confidence
+    xs,ys,ws,hs,cs = cinds[0], cinds[1], cinds[2], cinds[3], cinds[4]
+    
+    #index for prob vector for all classes
+    ps = T.arange(5,pred.shape[3])
+    
+    #theano will now make elements less than or equal to 0 as zero and others 1 (so output shape is )
+    obj_inds = gt[:,:, :,cs] > 0.
+   
+    #use nonzero in order to get boolean indexing  (eliminate the indices that are zero)
+    #get specific x,y location of gt objects and the predicted output for that x,y location
+    tg_obj = gt[obj_inds.nonzero()]
+    tp_obj = pred[obj_inds.nonzero()]
+    
+    #term1
+    #take the sum of squared difference between predicted and gt for the x and y corrdinate 
+    s_x = T.square(tp_obj[:,xs] - tg_obj[:,xs])
+
+    s_y = T.square(tp_obj[:,ys] - tg_obj[:,ys])
+
+    raw_loss1 = T.sum(s_x + s_y)
+
+    #multipily by lambda coord (the scaling factor for bbox coords)
+    sterm1 = kwargs['coord_penalty'] * raw_loss1
+
+
+    #term2
+
+    #get sum of squared diff of the of heights and widths b/w pred and gt normalized by squared heights and widths of gt 
+    s_w = T.square((tp_obj[:,ws] - tg_obj[:,ws])) #/ T.square(tg_obj[:,ws])
+    s_h = T.square((tp_obj[:,hs] - tg_obj[:,hs])) #/ T.square(tg_obj[:,hs])
+    raw_loss2 = T.sum(s_w + s_h)
+
+    sterm2 = kwargs['size_penalty'] * raw_loss2
+
+
+    #term3
+    #get sum of squared diff between confidence for places with actual boxes of pred vs. ground truth
+    s_c  = T.square(tp_obj[:,cs] - tg_obj[:,cs])
+    raw_loss3 = T.sum(s_c)
+    sterm3 = raw_loss3
+
+
+    #term4
+    #get the real coordinates where there are no objects
+    no_ind  = gt[:,:,:,cs] <= 0.
+    tg_no_obj = gt[no_ind.nonzero()]
+    tp_no_obj = pred[no_ind.nonzero()]
+
+    #get the sum of squared diff of the confidences for the places with no real boxes of  predicted vs. gr_truth
+    s_nc = T.square(tp_no_obj[:,cs] - tg_no_obj[:,cs])
+
+    raw_loss4 = T.sum(s_nc)
+
+    sterm4 = kwargs['nonobj_penalty'] * raw_loss4
+
+
+    #get the cross entropy of these softmax vectors
+    s_p = T.nnet.categorical_crossentropy(tp_obj[:,ps], tg_obj[:,ps])
+
+    raw_loss5 = T.sum(s_p)
+    sterm5 = raw_loss5
+
+    #adds up terms divides by number of examples in the batch
+    loss = (1. / nex) * (sterm1 + sterm2 + sterm3 + sterm4 + sterm5)
+    return loss
+
+
+
 from matplotlib import pyplot as plt
 from matplotlib import patches
 def plot_boxes(pbox_dict=None, gbox_dict=None, nclass=1):
@@ -222,91 +307,6 @@ def get_iou(box1,box2):
     union = get_area((xmin1, xmax1, ymin1, ymax1)) + get_area((xmin2, xmax2, ymin2, ymax2)) - inters                                                        
     
     return inters / union
-
-
-
-def get_detec_loss(pred,gt, lcxy,lchw,ln, delta=0.00001):
-    #TODO add in multiple bbox behavior
-    #pred is n_ex, [x,y,w,h,c,classes], x, y
-    #get number of examples and the indices of the tesnor 
-    #to where x,y coirrds height width and confidence go
-    pred = pred.transpose((0,2,3,1))
-    gt = gt.transpose((0,2,3,1))
-    nex = pred.shape[0]
-    cinds = T.arange(5)
-    
-    #x coord indices, y coord indices, width, height, confidence
-    xs,ys,ws,hs,cs = cinds[0], cinds[1], cinds[2], cinds[3], cinds[4]
-    
-    #index for prob vector for all classes
-    ps = T.arange(5,pred.shape[3])
-    
-    #theano will now make elements less than or equal to 0 as zero and others 1 (so output shape is )
-    obj_inds = gt[:,:, :,cs] > 0.
-   
-    #use nonzero in order to get boolean indexing  (eliminate the indices that are zero)
-    #get specific x,y location of gt objects and the predicted output for that x,y location
-    tg_obj = gt[obj_inds.nonzero()]
-    tp_obj = pred[obj_inds.nonzero()]
-    
-    #term1
-    #take the sum of squared difference between predicted and gt for the x and y corrdinate 
-    s_x = T.square(tp_obj[:,xs] - tg_obj[:,xs])
-
-    s_y = T.square(tp_obj[:,ys] - tg_obj[:,ys])
-
-    raw_loss1 = T.sum(s_x + s_y)
-
-    #multipily by lambda coord (the scaling factor for bbox coords)
-    sterm1 = lcxy * raw_loss1
-
-
-    #term2
-
-    #get sum of squared diff of the of heights and widths b/w pred and gt normalized by squared heights and widths of gt 
-    s_w = T.square((tp_obj[:,ws] - tg_obj[:,ws])) #/ T.square(tg_obj[:,ws])
-    s_h = T.square((tp_obj[:,hs] - tg_obj[:,hs])) #/ T.square(tg_obj[:,hs])
-    raw_loss2 = T.sum(s_w + s_h)
-
-    sterm2 = lchw * raw_loss2
-
-
-    #term3
-    #get sum of squared diff between confidence for places with actual boxes of pred vs. ground truth
-    s_c  = T.square(tp_obj[:,cs] - tg_obj[:,cs])
-    raw_loss3 = T.sum(s_c)
-    sterm3 = raw_loss3
-
-
-    #term4
-    #get the real coordinates where there are no objects
-    no_ind  = gt[:,:,:,cs] <= 0.
-    tg_no_obj = gt[no_ind.nonzero()]
-    tp_no_obj = pred[no_ind.nonzero()]
-
-    #get the sum of squared diff of the confidences for the places with no real boxes of  predicted vs. gr_truth
-    s_nc = T.square(tp_no_obj[:,cs] - tg_no_obj[:,cs])
-
-    raw_loss4 = T.sum(s_nc)
-
-    sterm4 = ln * raw_loss4
-
-
-    #get the cross entropy of these softmax vectors
-    s_p = T.nnet.categorical_crossentropy(tp_obj[:,ps], tg_obj[:,ps])
-
-    raw_loss5 = T.sum(s_p)
-    sterm5 = raw_loss5
-
-    #adds up terms divides by number of examples in the batch
-    terms = (1. / nex) * (sterm1 + sterm2 + sterm3 + sterm4 + sterm5)
-    return terms
-
-#     fterms = theano.function([pred, gt], terms)
-#     return fterms
-
-# fterms = get_detec_train_loss( pred,gt, lam_coord, lam_noobj)
-# print fterms(p,g)
 
 
 # 
@@ -387,9 +387,27 @@ class early_stop(object):
 
 def dump_hyperparams(dic, path):
     new_dic = {k:str(dic[k]) for k in dic.keys()}
-    with open(path + '/hyperparams.json', 'w') as f:
-        json.dump(new_dic, f)
-#     with open(path + '/hyperparams.pkl','w') as g:
-#         pickle.dump(dic, g)
-    
+    with open(path + '/hyperparams.txt', 'w') as f:
+        for k,v in new_dic.iteritems():
+            f.write(k + ' : ' + v)
+
+
+
+import logging
+def setup_logging(save_path):
+    logger = logging.getLogger('simple_example')
+    logger.setLevel(logging.DEBUG)
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler('%s/training.log'%(save_path))
+    fh.setLevel(logging.DEBUG)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+    return logger
+
+
+
+
 
