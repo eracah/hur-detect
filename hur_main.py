@@ -16,7 +16,7 @@ if we run multiple hur_mains at once on a global file system. Haven't truly impl
 from scripts.run_dir import create_run_dir
 from scripts.helper_fxns import dump_hyperparams
 
-from scripts.train_val import train
+from scripts.train_val import train, test
 from scripts.print_n_plot import plot_ims_with_boxes
 from scripts.build_network import build_network
 from scripts.netcdf_loader import bbox_iterator
@@ -25,20 +25,20 @@ from scripts.helper_fxns import setup_logging
 
 
 default_args = {                  'learning_rate': 0.0001,
-                                  'num_tr_days': 2,
+                                  'num_tr_days': 150,
                                   'input_shape': (None,16,768,1152),
                                   'dropout_p': 0, 
                                   'weight_decay': 0.0005, 
-                                  'num_filters': 2, 
-                                  'num_layers': 1,
+                                  'num_filters': 128, 
+                                  'num_layers': 6,
                                   'num_extra_conv': 0,
                                   'momentum': 0.9,
                                   'lambda_ae' : 10,
                                   'coord_penalty': 5,
                                   'size_penalty': 5,
                                   'nonobj_penalty': 0.5,
-                                  'iou_thresh' : 0.5,
-                                  'conf_thresh': 0.7,
+                                  'iou_thresh' : 0.1,
+                                  'conf_thresh': 0.4,
                                   'shuffle': True,
                                   'num_fc_units': "None",
                                   'metadata_dir': "/storeSSD/eracah/data/metadata/",
@@ -46,7 +46,7 @@ default_args = {                  'learning_rate': 0.0001,
                                   'batch_size' : 1,
                                   'ae_weight': 0.0,
                                   'epochs': 10000,
-                                  'tr_years': [1979, 1980,1981],
+                                  'tr_years': [1980,1983],
                                   'val_years': [1982],
                                   'save_weights': True,
                                   'num_classes': 4,
@@ -57,7 +57,11 @@ default_args = {                  'learning_rate': 0.0001,
                                   'nonlinearity': LeakyRectify(0.1),
                                   'w_init': HeUniform(),
                                   "batch_norm" : False,
-                                  "load_path": "None" # "/storeSSD/cbeckham/nersc/models/output/full_image_1/12.model"
+                                  "num_ims_to_plot" : 3,
+                                  "test": False,
+                                  "yolo_batch_norm" : True,
+                                  "yolo_load_path": "None",
+                                  "ae_load_path": "None", # "/storeSSD/cbeckham/nersc/models/output/full_image_1/12.model"
                 
                                   
                     }
@@ -67,6 +71,8 @@ default_args = {                  'learning_rate': 0.0001,
 # if inside a notebook, then get rid of weird notebook arguments, so that arg parsing still works
 if any(["jupyter" in arg for arg in sys.argv]):
     sys.argv=sys.argv[:1]
+    default_args.update({"num_tr_days":2, "num_filters":2, "num_layers": 1})
+    
     
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -97,8 +103,11 @@ fns, networks = build_network(kwargs)
 
 
 
-'''train'''
-train(bbox_iterator, kwargs, networks, fns)
+if kwargs["test"] == True:
+    test(bbox_iterator, kwargs, networks, fns)
+else:
+    train(bbox_iterator, kwargs, networks, fns)
+
 
 
 

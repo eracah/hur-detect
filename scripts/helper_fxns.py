@@ -389,7 +389,7 @@ def dump_hyperparams(dic, path):
     new_dic = {k:str(dic[k]) for k in dic.keys()}
     with open(path + '/hyperparams.txt', 'w') as f:
         for k,v in new_dic.iteritems():
-            f.write(k + ' : ' + v)
+            f.write(k + ' : ' + v + "\n")
 
 
 

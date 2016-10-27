@@ -95,7 +95,8 @@ def make_labels_for_dataset(fname, metadata_dir, time_steps=8):
             t = int(t)
 
             coords_for_t = selectdf[selectdf["time_step"]==t].drop(["time_step"], axis=1).values
-            
+            coords_for_t = coords_for_t[(coords_for_t > 0).all(1)]
+
             # get current number of events and number of events for this time step
             num_events_for_t = coords_for_t.shape[0]
             cur_num_events = int(event_counter[t])
@@ -425,9 +426,11 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
 
         midrange = (max_ + min_) / 2.
 
-        range_ = max_ - min_
+        range_ = (max_ - min_) / 2.
+        
+        arr -= midrange
 
-        arr = (arr - midrange) / (range_ /2.)
+        arr /= (range_)
         return arr, min_, max_   
 
 
@@ -473,7 +476,7 @@ def convert_coord_tens_to_box(coord_tens, xind, yind, scale_factor, xdim=768,ydi
 
 if __name__ == '__main__':
     dir_kwargs = dict(data_dir="/storeSSD/eracah/data/netcdf_ims/", metadata_dir="/storeSSD/eracah/data/metadata")
-    tr_kwargs = dict(years=[1979], days=5)
+    tr_kwargs = dict(years=[1980], days=5)
     tr_kwargs.update(dir_kwargs)
     val_kwargs= dict(years=[1979], days=2)
     val_kwargs.update(dir_kwargs)
@@ -483,4 +486,8 @@ if __name__ == '__main__':
         
     
         
+
+
+
+
 

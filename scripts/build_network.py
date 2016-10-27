@@ -66,8 +66,11 @@ def build_network(kwargs):
     networks = build_layers(input_var,kwargs)
     
     #load in any pretrained weights
-    if kwargs['load_path'] != "None":
-        load_weights(kwargs['load_path'], networks['ae'])
+    if kwargs['ae_load_path'] != "None":
+        networks['ae'] = load_weights(kwargs['ae_load_path'], networks['ae'])
+        
+    if kwargs['yolo_load_path'] != "None":
+        networks['yolo'] = load_weights(kwargs['yolo_load_path'], networks['yolo'])
     
     #compile theano functions
     fns = make_fns(networks, input_var, target_var, kwargs)
@@ -96,6 +99,7 @@ def build_layers(input_var, nk):
             num_filters = filters_list[i]
         else:
             num_filters = nk['num_filters']
+        
         conv = Conv2DLayer(conv, 
                               num_filters=num_filters, 
                               filter_size=nk['filter_dim'], 
@@ -103,33 +107,40 @@ def build_layers(input_var, nk):
                               stride=2,
                               W=nk['w_init'], 
                               nonlinearity=nk['nonlinearity'])
+        
 
-    encoder = copy.deepcopy(conv)
+    encoder = conv
+    
+    
+    if nk["yolo_batch_norm"]:
+        encoder = BatchNormLayer(encoder)
+    coord_net = Conv2DLayer(encoder, num_filters=5, filter_size=1, W=nk['w_init'], nonlinearity=rectify)
+    
+    class_net = Conv2DLayer(encoder, num_filters=nk['num_classes'], filter_size=1,W=nk['w_init'], nonlinearity=sigmoid)
+    
+    bbox_reg = ConcatLayer([coord_net, class_net])
+    
     for layer in get_all_layers(conv)[::-1]:
+        
         if nk["batch_norm"]:
             conv = batch_norm(conv)
         if isinstance(layer, InputLayer):
             break
         
         conv = InverseLayer(conv, layer)
-    
-    ae = copy.deepcopy(conv)
+        
 
     
-    coord_net = Conv2DLayer(batch_norm(encoder), num_filters=5, filter_size=1, W=nk['w_init'], nonlinearity=rectify)
     
-    class_net = Conv2DLayer(batch_norm(encoder), num_filters=nk['num_classes'], filter_size=1,W=nk['w_init'], nonlinearity=sigmoid)
-
-    bbox_reg = ConcatLayer([coord_net, class_net])
-    
-    return {'yolo': bbox_reg, 'ae':ae, "encoder":encoder}#, "decoder":decoder_layers}
+    return {'yolo': bbox_reg, 'ae':conv}#, "decoder":decoder_layers}
         
 
 def load_weights(pickle_file_path, network):
     '''grabs weights from an npz file'''
     old_params = pickle.load(open(pickle_file_path, 'r'))
 
-    return set_all_param_values(network, old_params)
+    set_all_param_values(network, old_params)
+    return network
     
 
 def make_fns(networks,input_var, target_var, kwargs ):
@@ -154,7 +165,7 @@ def make_fns(networks,input_var, target_var, kwargs ):
         ae_loss = make_ae_loss(ae_pred)
         
         #just to make sure we don't compute this if we don't want to
-        if kwargs['lambda_ae'] == 0:
+        if kwargs['lambda_ae'] == 0.:
             loss = yolo_loss
         else:
             loss = yolo_loss + kwargs['lambda_ae'] * ae_loss
@@ -178,18 +189,22 @@ def make_fns(networks,input_var, target_var, kwargs ):
         loss, yolo_loss, ae_loss =  make_loss(yolo_prediction, ae_prediction)
         
         #only using params from yolo here -> because decoder has no new params -> tied weights
-        params = lasagne.layers.get_all_params(yolo, trainable=True)
+        params = lasagne.layers.get_all_params(yolo, trainable=True) #+ lasagne.layers.get_all_params(ae, trainable=True)
         updates = lasagne.updates.adam(loss, params,learning_rate=kwargs['learning_rate'])
-#         if kwargs['lambda_ae'] != 0:
-#             train_fn = theano.function([input_var, target_var], [loss,yolo_loss, ae_loss], updates=updates)
-        train_fn = theano.function([input_var, target_var], [loss, yolo_loss, ae_loss], updates=updates)
+        if kwargs['lambda_ae'] != 0:
+            train_fn = theano.function([input_var, target_var], [loss,yolo_loss, ae_loss], updates=updates)
+        else:
+            train_fn = theano.function([input_var, target_var], loss, updates=updates)
         return train_fn
         
     
     def make_test_or_val_fn():
         '''takes as input the input, target vars and ouputs a non-dropout loss and an accuracy (intersection over union)'''
         test_loss, yolo_loss, ae_loss = make_loss(yolo_test_prediction,ae_test_prediction)
-        val_fn = theano.function([input_var, target_var], [test_loss,yolo_loss, ae_loss])
+        if kwargs['lambda_ae'] != 0:
+            val_fn = theano.function([input_var, target_var], [test_loss,yolo_loss, ae_loss])
+        else:
+            val_fn = theano.function([input_var, target_var], test_loss)
         return val_fn
     
     
