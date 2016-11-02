@@ -16,7 +16,7 @@ if we run multiple hur_mains at once on a global file system. Haven't truly impl
 from scripts.run_dir import create_run_dir
 from scripts.helper_fxns import dump_hyperparams
 
-from scripts.train_val import train, test
+from scripts.train_val import train, test, grid_search_val
 from scripts.print_n_plot import plot_ims_with_boxes
 from scripts.build_network import build_network
 from scripts.netcdf_loader import BBoxIterator
@@ -25,17 +25,16 @@ from scripts.helper_fxns import setup_logging
 
 
 default_args = {                  'learning_rate': 0.0001,
-                                  'num_tr_days': 150,
+                                  'num_tr_days': 365,
                                   'input_shape': (None,16,768,1152),
                                   'dropout_p': 0, 
                                   'weight_decay': 0.0005, 
-                                  'num_filters': 128, 
                                   'num_layers': 6,
                                   'num_extra_conv': 0,
                                   'momentum': 0.9,
                                   'lambda_ae' : 10,
                                   'coord_penalty': 5,
-                                  'size_penalty': 10,
+                                  'size_penalty': 7,
                                   'nonobj_penalty': 0.5,
                                   'iou_thresh' : 0.1,
                                   'conf_thresh': 0.4,
@@ -44,7 +43,6 @@ default_args = {                  'learning_rate': 0.0001,
                                   'metadata_dir': "/storeSSD/eracah/data/metadata/",
                                   'data_dir': "/storeSSD/eracah/data/netcdf_ims",
                                   'batch_size' : 1,
-                                  'ae_weight': 0.0,
                                   'epochs': 10000,
                                   'tr_years': [1979,1980,1981,1983,1984,1987],
                                   'val_years': [1982, 1986],
@@ -60,9 +58,12 @@ default_args = {                  'learning_rate': 0.0001,
                                   "batch_norm" : False,
                                   "num_ims_to_plot" : 8,
                                   "test": False,
+                                  "grid_search": False,
                                   "yolo_batch_norm" : True,
+                                  "filters_scale" : 1.,
                                   "yolo_load_path": "None",
                                   "3D": False,
+                                  "ignore_plot_fails":1,
                                   "ae_load_path": "None", # "/storeSSD/cbeckham/nersc/models/output/full_image_1/12.model"
                 
                                   
@@ -98,6 +99,7 @@ if kwargs["3D"] == True:
     kwargs['time_chunks_per_example'] = 8
     
 kwargs['num_val_days'] = int(np.ceil(0.2*kwargs['num_tr_days']))
+kwargs['num_test_days'] = kwargs["num_val_days"]
 kwargs['save_path'] = run_dir
 
 '''save hyperparams'''
@@ -112,6 +114,8 @@ fns, networks = build_network(kwargs)
 
 if kwargs["test"] == True:
     test(BBoxIterator, kwargs, networks, fns)
+elif kwargs["grid_search"] == True:
+    grid_search_val(BBoxIterator, kwargs, networks, fns)
 else:
     train(BBoxIterator, kwargs, networks, fns)
 

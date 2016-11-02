@@ -40,7 +40,9 @@ class TrainVal(object):
         self.tr_kwargs.update({'days':kwargs['num_tr_days'], 'years':kwargs['tr_years']})
         self.val_kwargs = {k:kwargs[k] for k in it_list}
         self.val_kwargs.update({'days':kwargs['num_val_days'], 'years':kwargs['val_years']})
-        
+        self.test_kwargs = {k:kwargs[k] for k in it_list}
+        self.test_kwargs.update({'days':kwargs['num_test_days'], 'years':kwargs['test_years']})
+
     
     def print_network(self, networks):
         yolo, ae = networks['yolo'], networks['ae']
@@ -76,13 +78,14 @@ class TrainVal(object):
            
             
             if self.kwargs['lambda_ae'] != 0:
-                loss, yolo_loss, rec_loss = self.fns[type_](x,y)
+                loss, rec_loss, yolo_loss, raw_yolo_loss,                 weight_decay_term, coord_term, size_term,                 conf_term, no_obj_conf_term, xentropy_term = self.fns[type_](x,y)
             else:
                 w_yolo_loss, raw_yolo_loss, weight_decay_term, coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term = self.fns[type_](x,y)
                 yolo_loss = w_yolo_loss
                 loss = yolo_loss
-                terms = [coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term]
                 rec_loss = np.inf
+                
+            terms = [coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term]
             
             acc, tp, n, MAR = self.fns["MAP"](x,y, iou_thresh=self.kwargs['iou_thresh'],
                                             conf_thresh=self.kwargs['conf_thresh'])
@@ -93,7 +96,14 @@ class TrainVal(object):
             
             
             if self.epoch % 2 == 0:
-                self.plot_ims(x, y, type_, batches)
+                if self.kwargs["ignore_plot_fails"]:
+                    try:
+                        self.plot_ims(x, y, type_, batches)
+                    except:
+                        pass
+                else:
+                    self.plot_ims(x, y, type_, batches)
+    
             
     
             
@@ -122,8 +132,7 @@ class TrainVal(object):
         self.save_weights("ae")
         
     
-    def test(self,iou_thresh=None, conf_thresh=None):
-        it_kwargs = self.val_kwargs #test_kwargs
+    def _test(self,it_kwargs, iou_thresh=None, conf_thresh=None):
         acc_tot = 0
         batches = 0
         iou_thresh = (iou_thresh if iou_thresh is not None else self.kwargs['iou_thresh'])
@@ -137,6 +146,13 @@ class TrainVal(object):
         MAP = float(acc_tot) / batches
         self.kwargs["logger"].info("Final Mean Average Precision is: %6.4f" % MAP)
         return MAP
+    
+    def test(self,iou_thresh=None, conf_thresh=None):
+        self._test(it_kwargs=self.test_kwargs, iou_thresh=iou_thresh, conf_thresh=conf_thresh)
+    def val(self,iou_thresh=None, conf_thresh=None):
+        self._test(it_kwargs=self.val_kwargs, iou_thresh=iou_thresh, conf_thresh=conf_thresh)
+        
+        
             
 
     def save_weights(self,name):
@@ -239,12 +255,16 @@ class TrainVal(object):
 
                 if self.kwargs["3D"]:
                     i = i / 2
+                    
+                b = 1
                 for b,box in enumerate(gt_boxes[i]):
                     self.add_bbox(sp, box, color='g')
                     
-                    
+                  
                 # top two most confident
-                ind = 3*b if len(pred_boxes[i]) >= 3*b else len(pred_boxes[i])
+                ind = 3*len(gt_boxes[i]) if len(pred_boxes[i]) >= 3*b else len(pred_boxes[i])
+                if len(gt_boxes[i]) == 0:
+                    ind = 3
                 for pbox in pred_boxes[i][:ind]:
                     conf = pbox[4]
                     if conf > self.kwargs['conf_thresh']:
@@ -297,27 +317,44 @@ class TrainVal(object):
             
     def _plot_reconstructed_ims(self, orig, rec, num=1, name="tr"):
         """orig and rec is a N,vars,X,y tensor"""
-        n_ims = orig.shape[0]
-        channels = orig.shape[1] #ims.shape[1]
+        """ for 3D they are an N,vars, time_steps,x,y """
+        if self.kwargs["3D"]:
+            n_ims = orig.shape[2]
+        else:
+            n_ims = orig.shape[0]
+        tmq_ind =6 
+        psl_ind = 2
+        channels = [tmq_ind, psl_ind] #orig.shape[1] #ims.shape[1]
         plt.figure(4, figsize=(40,40))
         plt.clf()
         
 
         count=0
         for i in range(n_ims):
-            for j in range(channels):
+            for j in channels:
+                if self.kwargs["3D"]:
+                    im_slice = slice(0,i,j)
+                else:
+                    im_slice = slice(i,j)
                 count += 1
-                sp = plt.subplot(n_ims*2,channels, count)
-                sp.imshow(orig[i,j])
+                sp = plt.subplot(n_ims*2,len(channels), count)
+                if self.kwargs["3D"]:
+                    sp.imshow(orig[0,j, i])
+                else:
+                    sp.imshow(orig[i,j])
+                    
                 count +=1
-                sp = plt.subplot(n_ims*2,channels, count)
-                sp.imshow(rec[i,j])
+                sp = plt.subplot(n_ims*2,len(channels), count)
+                if self.kwargs["3D"]:
+                    sp.imshow(rec[0,j, i])
+                else:
+                    sp.imshow(rec[i,j])
         
         rec_dir = join(self.kwargs['save_path'], name + "_rec")
         self.makedir_if_not_there(rec_dir)
         
         
-        if self.epoch % 10 == 0:           
+        if self.epoch % 4 == 0:           
             plt.savefig("%s/%s_epoch_%i_rec_%i.png"%(rec_dir, name, self.epoch, num))
         plt.savefig("%s/%s_rec_%i.png"%(rec_dir, name, num))
         pass
@@ -341,22 +378,25 @@ def train(iterator, kwargs, networks, fns):
         tv.do_one_epoch()
         tv.plot_learn_curve()
         
-def test(iterator, kwargs, networks, fns):
+def grid_search_val(iterator, kwargs, networks, fns):
     tv = TrainVal(iterator,kwargs, fns, networks)
     max_ = (0.0,0,0)
     
-    iou_params = [0.1]
+    iou_params = [0.1,0.5]
     conf_params = [0.1,0.2,0.3,0.4,0.5,0.6, 0.7, 0.8,0.9]
     for iou_thresh in iou_params:
         for conf_thresh in conf_params:
-            MAP = tv.test(iou_thresh=iou_thresh, conf_thresh=conf_thresh)
+            MAP = tv.val(iou_thresh=iou_thresh, conf_thresh=conf_thresh)
             if MAP >=  max_[0]:
                 print MAP, iou_thresh, conf_thresh
                 max_ = (MAP, iou_thresh, conf_thresh)
     print max_
+    
+def test(iterator, kwargs, networks, fns):
+    tv = TrainVal(iterator,kwargs, fns, networks)
+    MAP = tv.test()
+    print MAP, iou_thresh, conf_thresh
+
+    
          
-
-
-
-
 

@@ -89,21 +89,19 @@ def build_layers(input_var, nk):
     '''total number of conv layers is num_convpool * (1 + num_extra_conv)'''
     
     filter_dim = nk['filter_dim']
-    base_num_filters = nk['num_filters']
     num_layers = nk['num_layers']
-    num_filters = base_num_filters
     
 
     filters_list = [128, 256, 512, 768, 1024, 1280]
     conv = lasagne.layers.InputLayer(shape=nk['input_shape'])
     for i in range(num_layers):
-        if nk['num_filters'] == 128:
-            num_filters = filters_list[i]
-        else:
-            num_filters = nk['num_filters']
+
+        
+        num_filters = int(nk["filters_scale"] * filters_list[i])
+
         
         if nk["3D"]:
-            conv = dnn.Conv3DDNNLayer(conv, num_filters=num_filters /36, filter_size=(3,5,5), pad=(1,2,2), stride=(1,2,2))
+            conv = dnn.Conv3DDNNLayer(conv, num_filters=num_filters, filter_size=(3,5,5),pad=(1,2,2), stride=(1,2,2)) 
         else:
             conv = Conv2DLayer(conv, 
                                   num_filters=num_filters, 
@@ -112,25 +110,24 @@ def build_layers(input_var, nk):
                                   stride=2,
                                   W=nk['w_init'], 
                                   nonlinearity=nk['nonlinearity'])
-        if nk["batch_norm"]:
-            conv = batch_norm(conv)
+
         
 
     encoder = conv
     
     
  
-
-    
     if nk["yolo_batch_norm"]:
         encoder = BatchNormLayer(encoder)
-
-    if nk["3D"]:
-            box_conf = dnn.Conv3DDNNLayer(encoder, num_filters=2, filter_size=(3,3,3), stride=(2,1,1), pad=(1,1,1), nonlinearity=linear)
     
-            box_conf = NonlinearityLayer(box_conf, softmax4D)
-            class_conf = dnn.Conv3DDNNLayer(encoder, num_filters=nk['num_classes'], filter_size=(3,3,3), stride=(2,1,1), pad=(1,1,1), nonlinearity=linear)
-            class_conf = NonlinearityLayer(class_conf, softmax4D)
+    if nk["3D"]:
+            #encoder = FeaturePoolLayer(encoder, pool_size=640, axis=1)
+            box_conf = dnn.Conv3DDNNLayer(encoder, num_filters=2, filter_size=(3,3,3), 
+                                          stride=(2,1,1), pad=(1,1,1), nonlinearity=softmax4D)
+    
+            #box_conf = NonlinearityLayer(box_conf, softmax4D)
+            class_conf = dnn.Conv3DDNNLayer(encoder, num_filters=nk['num_classes'], filter_size=(3,3,3), stride=(2,1,1), pad=(1,1,1), nonlinearity=softmax4D)
+            #class_conf = NonlinearityLayer(class_conf, softmax4D)
             coord_net = dnn.Conv3DDNNLayer(encoder, num_filters=4, filter_size=(3,3,3), stride=(2,1,1), pad=(1,1,1), W=nk['w_init'],
                             nonlinearity=rectify)
             #outputs a batch_size x 10 x 4 x 12 x 18 
@@ -234,7 +231,11 @@ def make_fns(networks,input_var, target_var, kwargs ):
         params = lasagne.layers.get_all_params(yolo, trainable=True) #+ lasagne.layers.get_all_params(ae, trainable=True)
         updates = lasagne.updates.adam(loss, params,learning_rate=kwargs['learning_rate'])
         if kwargs['lambda_ae'] != 0:
-            train_fn = theano.function([input_var, target_var], [loss,w_yolo_loss, ae_loss], updates=updates)
+            train_fn = theano.function([input_var, target_var], [loss,ae_loss,
+                                                                 w_yolo_loss, raw_yolo_loss,
+                                                                 weight_decay_term, term1,term2,
+                                                                 term3,term4,term5], 
+                                                                 updates=updates)
         else:
             train_fn = theano.function([input_var, target_var], 
                                        [w_yolo_loss, raw_yolo_loss, weight_decay_term, term1,term2,term3,term4,term5],
@@ -247,7 +248,10 @@ def make_fns(networks,input_var, target_var, kwargs ):
         test_loss, w_yolo_loss, ae_loss, raw_yolo_loss, weight_decay_term, terms = make_loss(yolo_test_prediction,ae_test_prediction)
         term1,term2,term3,term4,term5 = terms
         if kwargs['lambda_ae'] != 0:
-            val_fn = theano.function([input_var, target_var], [test_loss,w_yolo_loss, ae_loss])
+            val_fn = theano.function([input_var, target_var], [test_loss,ae_loss,
+                                                                 w_yolo_loss, raw_yolo_loss,
+                                                                 weight_decay_term, term1,term2,
+                                                                 term3,term4,term5])
         else:
             val_fn = theano.function([input_var, target_var], [w_yolo_loss, raw_yolo_loss, 
                                                                weight_decay_term, term1,term2,term3,term4,term5])
@@ -294,4 +298,15 @@ def make_fns(networks,input_var, target_var, kwargs ):
     box_fn = make_box_fn()
     
     return {"tr":train_fn, "val":test_or_val_fn, "MAP": MAP_fn, "rec": ae_pred_fn, "box": box_fn}
+
+
+
+
+
+
+128 / 32
+
+
+
+
 
