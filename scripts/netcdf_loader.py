@@ -160,7 +160,7 @@ class BBoxIterator(object):
                  time_chunks_per_example=1,
                  no_labels_only=False,
                  time_stride=None, 
-                 scale_factor=64.):
+                 scale_factor=64., seed =5):
         
         frame = inspect.currentframe()
         self.set_data_members(frame)
@@ -181,6 +181,7 @@ class BBoxIterator(object):
         self.time_steps_per_day = 8
         self.xdim = 768
         self.ydim = 1152
+        self.seed = seed
         self.camfiles = get_camfiles(self.data_dir, self.years)[:self.days]
 
             
@@ -258,7 +259,7 @@ class BBoxIterator(object):
         
         
         if self.shuffle:
-            np.random.shuffle(self.camfiles)
+            np.random.RandomState(seed=self.seed).shuffle(self.camfiles)
         
         for camfile in self.camfiles:
             tr_data = self.grab_data(camfile) #one day slice per dataset
@@ -464,28 +465,6 @@ class BBoxIterator(object):
 
 
 
-if __name__ == '__main__':
-    b = BBoxIterator(time_chunks_per_example=4, labels_only=False, batch_size=2)
-
-    for x,y in b.iterate():
-        print x.shape, y.shape
-        plt.imshow(x[0,6,0])
-
-
-    dir_kwargs = dict(data_dir="/storeSSD/eracah/data/netcdf_ims/", metadata_dir="/storeSSD/eracah/data/metadata")
-    tr_kwargs = dict(years=[1980], days=5, time_chunks_per_example=8, labels_only=False)
-    tr_kwargs.update(dir_kwargs)
-    val_kwargs= dict(years=[1979], days=2)
-    val_kwargs.update(dir_kwargs)
-    print tr_kwargs
-    for x,y in bbox_iterator(**tr_kwargs):
-        print x.shape, y.shape
-        
-    
-        
-
-
-
 # minw = 10000
 # minh = 10000
 # maxw= 0
@@ -546,6 +525,123 @@ if __name__ == '__main__':
 # maxh
 
 # !ls /storeSSD/eracah/data/metadata/
+
+
+
+
+def count_events(year):
+    metadata_dir = "/storeSSD/eracah/data/metadata/"
+    coord_keys = ["xmin", "xmax", "ymin", "ymax"]
+    d ={"us-ar":0, "etc":0, "tc":0}
+    for weather_type in d.keys(): 
+        if weather_type == 'us-ar':
+            labeldf = pd.read_csv(join(metadata_dir, 'ar_labels.csv'))
+            labeldf = labeldf.ix[(labeldf.year==year)]
+            d[weather_type] = len(labeldf)
+#             tmplabeldf=labeldf.ix[ (labeldf.month==ts.month) & (labeldf.day==ts.day) & (labeldf.year==ts.year) ].copy()
+        else:
+            labeldf = pd.read_csv(join(metadata_dir, '_'.join([str(year),weather_type, 'labels.csv'])))
+#             tmplabeldf=labeldf.ix[ (labeldf.month==ts.month) & (labeldf.day==ts.day) ].copy()
+            if weather_type == "etc":
+                d[weather_type] = len(labeldf)
+            else:
+                d["td"] = len(labeldf[labeldf["str_category"] == "tropical_depression"])
+                d["tc"] = len(labeldf[labeldf["str_category"] == "tropical_cyclone"])
+            
+    return d
+
+
+
+def count_events_md(year, last_md = (3,16)):
+    lm, ld = last_md
+    metadata_dir = "/storeSSD/eracah/data/metadata/"
+    coord_keys = ["xmin", "xmax", "ymin", "ymax"]
+    d ={"us-ar":0, "etc":0, "tc":0}
+    for weather_type in d.keys(): 
+        if weather_type == 'us-ar':
+            labeldf = pd.read_csv(join(metadata_dir, 'ar_labels.csv'))
+            for i in range(1,lm):
+                labeldf = labeldf.ix[(labeldf.year==year) & (labeldf.month == i)]
+                d[weather_type] += len(labeldf)
+            for i in range(1,ld+1):
+                labeldf_end = labeldf.ix[(labeldf.year==year) & (labeldf.month ==lm) & (labeldf.day == i)]
+                d[weather_type] += len(labeldf_end)
+           
+#             tmplabeldf=labeldf.ix[ (labeldf.month==ts.month) & (labeldf.day==ts.day) & (labeldf.year==ts.year) ].copy()
+        else:
+            labeldf = pd.read_csv(join(metadata_dir, '_'.join([str(year),weather_type, 'labels.csv'])))
+            if weather_type == "etc":
+                for i in range(1,lm):
+                    labeldfi = labeldf.ix[(labeldf.year==year) & (labeldf.month == i)]
+                    d[weather_type] += len(labeldfi)
+                for i in range(1,ld+1):
+                    labeldfi = labeldf.ix[(labeldf.year==year) & (labeldf.month ==lm) & (labeldf.day == i)]
+                    d[weather_type] += len(labeldfi)
+            else:
+                d["td"] = 0
+                for i in range(1,lm):
+                    labeldfi = labeldf.ix[(labeldf.year==year) & (labeldf.month == i)]
+                    d["td"] += len(labeldfi[labeldfi["str_category"] == "tropical_depression"])
+                    d["tc"] += len(labeldfi[labeldfi["str_category"] == "tropical_cyclone"])
+                for i in range(1,ld+1):
+                    labeldfi = labeldf.ix[(labeldf.year==year) & (labeldf.month ==lm) & (labeldf.day == i)]
+                    d["td"] += len(labeldfi[labeldfi["str_category"] == "tropical_depression"])
+                    d["tc"] += len(labeldfi[labeldfi["str_category"] == "tropical_cyclone"])
+              
+    return d
+
+
+
+
+
+
+
+def get_percents(event_dict):
+    tot = sum(event_dict.values())
+    new_d = {k: float(v)/ tot for k,v in event_dict.iteritems()}
+    return new_d
+
+
+
+get_percents(count_events(1979))
+
+
+
+count_events(1979)
+
+
+
+count_events_md(1982)
+
+
+
+count_events_md(1985)
+
+
+
+get_percents(count_events(1982))
+
+
+
+365 * 8
+
+
+
+metadata_dir = "/storeSSD/eracah/data/metadata/"
+
+
+
+labeldf = pd.read_csv(join(metadata_dir, '_'.join([str(1979),"tc", 'labels.csv'])))
+
+
+
+len(labeldf[labeldf["str_category"] == "tropical_depression"])
+
+len(labeldf[labeldf["str_category"] == "tropical_cyclone"])
+
+
+
+range(1,3)
 
 
 

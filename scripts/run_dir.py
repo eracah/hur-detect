@@ -11,8 +11,11 @@ import imp
 
 #print os.getcwd()
 
-def create_run_dir(custom_rc=False):
-    results_dir = os.getcwd() + '/results'
+def create_run_dir(base_dir=None):
+    if base_dir is None:
+        results_dir = os.getcwd() + '/results'
+    else:
+        results_dir = base_dir + '/results'
     run_num_file = os.path.join(results_dir, "run_num.txt")
     if not os.path.exists(results_dir):
         print "making results dir"
@@ -39,8 +42,8 @@ def create_run_dir(custom_rc=False):
     run_dir = os.path.join(results_dir,'run%i'%(run_num))
     os.mkdir(run_dir)
     
-    if custom_rc:
-        make_custom_config_file(run_dir)
+#     if custom_rc:
+#         make_custom_config_file(run_dir)
     return run_dir
 
 

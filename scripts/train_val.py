@@ -14,22 +14,21 @@ from matplotlib import patches
 import logging
 from os.path import join, exists
 from os import mkdir, makedirs
+from collections import Counter
 
 
 
 class TrainVal(object):
     def __init__(self, iterator, kwargs, fns, networks):
         self.kwargs = kwargs
-        self.metrics_keys = ["loss", "yolo_loss", "rec_loss", "acc", "time", "raw_yolo_loss",                              "weight_decay_term", "true_positives", "total_guesses", "mean_average_recall"] +                             ['coord_term', 'size_term', 'conf_term', 'no_obj_conf_term', 'xentropy_term']
-        self.metrics = {"tr_" + k: [] for k in self.metrics_keys }
-        self.metrics.update({"val_" + k: [] for k in self.metrics_keys})
         self.iterator = iterator
         self.fns = fns
-       
+        self.xdim=768
+        self.ydim = 1152
         self.epoch = 0
         self.start_time = 0
         self.seed = 5
-
+        self.classes = [ "TD", "TC", "ETC", "AR"]
         self.max_ims = self.kwargs['num_ims_to_plot']
         self.networks = networks
         self.print_network(networks)
@@ -41,7 +40,7 @@ class TrainVal(object):
         self.val_kwargs = {k:kwargs[k] for k in it_list}
         self.val_kwargs.update({'days':kwargs['num_val_days'], 'years':kwargs['val_years']})
         self.test_kwargs = {k:kwargs[k] for k in it_list}
-        self.test_kwargs.update({'days':kwargs['num_test_days'], 'years':kwargs['test_years']})
+        self.test_kwargs.update({'days':kwargs['num_test_days'], 'years':kwargs['test_years'], "seed":5})
 
     
     def print_network(self, networks):
@@ -67,27 +66,16 @@ class TrainVal(object):
     def _do_one_epoch(self, type_="tr"):
         print "beginning epoch %i" % (self.epoch)
         start_time = time.time()
-        metrics_tots = {type_ + "_" + k:0 for k in self.metrics_keys}
+        metrics_tots = {}
         batches = 0
         if type_ == "tr":
             it_kwargs = self.tr_kwargs
         else:
             it_kwargs = self.val_kwargs
         for x,y in self.iterator(**it_kwargs).iterate():
+            loss_dict = self.fns[type_](x,y)
             
-           
-            
-            if self.kwargs['lambda_ae'] != 0:
-                loss, rec_loss, yolo_loss, raw_yolo_loss,                 weight_decay_term, coord_term, size_term,                 conf_term, no_obj_conf_term, xentropy_term = self.fns[type_](x,y)
-            else:
-                w_yolo_loss, raw_yolo_loss, weight_decay_term, coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term = self.fns[type_](x,y)
-                yolo_loss = w_yolo_loss
-                loss = yolo_loss
-                rec_loss = np.inf
-                
-            terms = [coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term]
-            
-            acc, tp, n, MAR = self.fns["MAP"](x,y, iou_thresh=self.kwargs['iou_thresh'],
+            acc_dict = self.fns["MAP"](x,y, iou_thresh=self.kwargs['iou_thresh'],
                                             conf_thresh=self.kwargs['conf_thresh'])
             
             pred_boxes, gt_boxes = self.fns["box"](x,y)
@@ -106,19 +94,13 @@ class TrainVal(object):
     
             
     
-            
-            for t, tk in enumerate(['coord_term', 'size_term', 'conf_term', 'no_obj_conf_term', 'xentropy_term']):
-                metrics_tots[type_ + "_" + tk] += terms[t]
-                
-            metrics_tots[type_ + "_weight_decay_term"] += weight_decay_term
-            metrics_tots[type_ + "_raw_yolo_loss"] += raw_yolo_loss
-            metrics_tots[type_ + "_rec_loss"] += rec_loss
-            metrics_tots[type_ + "_yolo_loss"] += yolo_loss
-            metrics_tots[type_ + "_loss"] += loss
-            metrics_tots[type_ + "_acc"] += acc
-            metrics_tots[type_ + "_true_positives"] += tp
-            metrics_tots[type_ + "_total_guesses"] += n
-            metrics_tots[type_ + "_mean_average_recall"] += MAR
+            loss_acc_dict = loss_dict.update(acc_dict)
+
+            for k in loss_acc_dict.keys():
+                key = type_ + "_" + k
+                if key not in metrics_tots:
+                    metrics_tots[key] = 0
+                metrics_tots[key] += acc_dict[k]
             
    
             batches += 1
@@ -126,40 +108,95 @@ class TrainVal(object):
         del y
         assert batches > 0
         for k,v in metrics_tots.iteritems():
+            if k not in self.metrics:
+                self.metrics[k] = []
             self.metrics[k].append(v / batches)
         self.metrics[type_ + "_time"].append(time.time() - start_time)
-        self.save_weights("yolo")
-        self.save_weights("ae")
+        
+        
+        best_metrics = ["val_mAP", "val_loss", "val_rec_loss"]
+        
+        # if most recent validation
+        for k in best_metrics:
+            if len(self.metrics) > 1:
+                if self.metrics[k][-1] > max(self.metrics[k][:-1]):
+                    self.save_weights("yolo", "best_" + k)
+            else:
+                self.save_weights("yolo", "best_" + k)
+
+            
+
+            
+                
+        self.save_weights("yolo", "cur")
+        self.save_weights("ae", "cur")
         
     
     def _test(self,it_kwargs, iou_thresh=None, conf_thresh=None):
-        acc_tot = 0
-        batches = 0
+        inps = []
+        batches = 0 
         iou_thresh = (iou_thresh if iou_thresh is not None else self.kwargs['iou_thresh'])
-        conf_thresh= (conf_thresh if iou_thresh is not None else self.kwargs['conf_thresh'] )
+        conf_thresh= (conf_thresh if conf_thresh is not None else self.kwargs['conf_thresh'] )
         for x,y in self.iterator(**it_kwargs).iterate():
-            acc, tp, n, MAR = self.fns["MAP"](x,y, iou_thresh=iou_thresh,
+            acc_dict = self.fns["MAP"](x,y, iou_thresh=iou_thresh,
                                 conf_thresh=conf_thresh)
-            acc_tot += acc
+            
+            inps.append(acc_dict)
             batches += 1
         
-        MAP = float(acc_tot) / batches
-        self.kwargs["logger"].info("Final Mean Average Precision is: %6.4f" % MAP)
-        return MAP
+        sums = sum((Counter(dict(x)) for x in inps),Counter())
+        for k in inps[0].keys():
+            if k not in sums.keys():
+                sums[k] = 0.0
+        final_acc_dict = {k: v / batches for k,v in sums.iteritems() }
+        print final_acc_dict
+        del final_acc_dict["n"]
+        del final_acc_dict["tp"]
+        for k in final_acc_dict.keys():
+            self.kwargs["logger"].info("Final " + k +  " for iou: %6.4f and conf: %6.4f is: %6.4f"                                       %(iou_thresh, conf_thresh, final_acc_dict[k]))
+
+        return final_acc_dict
     
     def test(self,iou_thresh=None, conf_thresh=None):
-        self._test(it_kwargs=self.test_kwargs, iou_thresh=iou_thresh, conf_thresh=conf_thresh)
+        return self._test(it_kwargs=self.test_kwargs, iou_thresh=iou_thresh, conf_thresh=conf_thresh)
     def val(self,iou_thresh=None, conf_thresh=None):
-        self._test(it_kwargs=self.val_kwargs, iou_thresh=iou_thresh, conf_thresh=conf_thresh)
+        return self._test(it_kwargs=self.val_kwargs, iou_thresh=iou_thresh, conf_thresh=conf_thresh)
         
+        
+    
+    def get_encoder_fmaps(self):
+        fmaps_tr_dir = join(self.kwargs["save_path"], "tr_fmaps")
+        fmaps_te_dir = join(self.kwargs["save_path"], "te_fmaps")
+        self.makedir_if_not_there(fmaps_tr_dir)
+        self.makedir_if_not_there(fmaps_te_dir)
+        i =0
+        for i, (x,y) in enumerate(self.iterator(**self.test_kwargs).iterate()):
+            fmap = self.fns["hid"](x)
+            pickle.dump([x,y,fmap],open(join(fmaps_te_dir, "te_fmaps" + str(i) + ".pkl"), "w"))
+            if i + 1 > self.max_ims:
+                break
+
+
+        for i, (x,y) in enumerate(self.iterator(**self.tr_kwargs).iterate()):
+            fmap = self.fns["hid"](x)
+            pickle.dump([x,y,fmap],open(join(fmaps_tr_dir, "tr_fmaps" + str(i) + ".pkl"), "w"))
+            if i + 1 > self.max_ims:
+                break
         
             
-
-    def save_weights(self,name):
+        
+    def postproc_ims(self):
+        j =0 
+        for i, (x,y) in enumerate(self.iterator(**self.test_kwargs).iterate()):
+            if i%4==0:
+                j+=1
+                self.plot_ims(x,y,"test", j)
+        
+    def save_weights(self,name,suffix=""):
         params = get_all_param_values(self.networks[name])
         model_dir = join(self.kwargs['save_path'], "models")
         self.makedir_if_not_there(model_dir)
-        pickle.dump(params,open(join(model_dir, name + ".pkl"), "w"))
+        pickle.dump(params,open(join(model_dir, name + "_" + suffix + ".pkl"), "w"))
         
     def makedir_if_not_there(self, dirname):
         if not exists(dirname):
@@ -185,9 +222,9 @@ class TrainVal(object):
         
 
     def plot_learn_curve(self):
-        for k in self.metrics_keys:
+        for k in self.metrics.keys():
             if "time" not in k:
-                self._plot_learn_curve(k)
+                self._plot_learn_curve(k.split("_")[1])
         
     def _plot_learn_curve(self,type_):
         plt.clf()
@@ -249,9 +286,9 @@ class TrainVal(object):
                 count+= 1
                 sp = plt.subplot(n_ims,channels, count)
                 if self.kwargs["3D"]:
-                    sp.imshow(ims[0,tmq_ind,i])
+                    sp.imshow(ims[0,tmq_ind,i][::-1])
                 else:
-                    sp.imshow(ims[i,tmq_ind])
+                    sp.imshow(ims[i,tmq_ind][::-1])
 
                 if self.kwargs["3D"]:
                     i = i / 2
@@ -304,12 +341,13 @@ class TrainVal(object):
 
     def add_bbox(self, subplot, bbox, color):
         #box of form center x,y  w,h
-        x,y,w,h = bbox[:4]
+        x,y,w,h, conf1, cls = bbox
         subplot.add_patch(patches.Rectangle(
-        xy=( y - h / 2., x - w / 2. ,),
+        xy=( y - h / 2., (self.xdim - x) - w / 2.),
         width=h,
-        height=w, lw=1,
+        height=w, lw=2,
         fill=False, color=color))
+        subplot.text(y - h / 2., (self.xdim - x) - w / 2.,self.classes[cls], fontdict={"color":color})
 
                 
 #     def plot_reconstructed_ims(self,x,xrec):
@@ -330,8 +368,9 @@ class TrainVal(object):
         
 
         count=0
-        for i in range(n_ims):
-            for j in channels:
+        for j in channels:
+            for i in range(n_ims):
+            
                 if self.kwargs["3D"]:
                     im_slice = slice(0,i,j)
                 else:
@@ -339,16 +378,16 @@ class TrainVal(object):
                 count += 1
                 sp = plt.subplot(n_ims*2,len(channels), count)
                 if self.kwargs["3D"]:
-                    sp.imshow(orig[0,j, i])
+                    sp.imshow(orig[0,j, i][::-1])
                 else:
-                    sp.imshow(orig[i,j])
+                    sp.imshow(orig[i,j][::-1])
                     
                 count +=1
                 sp = plt.subplot(n_ims*2,len(channels), count)
                 if self.kwargs["3D"]:
-                    sp.imshow(rec[0,j, i])
+                    sp.imshow(rec[0,j, i][::-1])
                 else:
-                    sp.imshow(rec[i,j])
+                    sp.imshow(rec[i,j][::-1])
         
         rec_dir = join(self.kwargs['save_path'], name + "_rec")
         self.makedir_if_not_there(rec_dir)
@@ -362,13 +401,10 @@ class TrainVal(object):
         
 
         
-    
 
-    
+
 
 def train(iterator, kwargs, networks, fns):
-    
-    
     print "Starting training..." 
     
 
@@ -380,23 +416,37 @@ def train(iterator, kwargs, networks, fns):
         
 def grid_search_val(iterator, kwargs, networks, fns):
     tv = TrainVal(iterator,kwargs, fns, networks)
-    max_ = (0.0,0,0)
+    max_ = (0.0,0.0,0.0, 0.0,0,0)
     
-    iou_params = [0.1,0.5]
-    conf_params = [0.1,0.2,0.3,0.4,0.5,0.6, 0.7, 0.8,0.9]
+    iou_params = [0.1]
+    conf_params = [0.4, 0.6, 0.8, 0.9]
     for iou_thresh in iou_params:
         for conf_thresh in conf_params:
-            MAP = tv.val(iou_thresh=iou_thresh, conf_thresh=conf_thresh)
-            if MAP >=  max_[0]:
-                print MAP, iou_thresh, conf_thresh
-                max_ = (MAP, iou_thresh, conf_thresh)
-    print max_
+            final_acc_dict = tv.val(iou_thresh=iou_thresh, conf_thresh=conf_thresh)
+            if final_acc_dict["mAP"] >=  max_[0]:
+                max_ = [final_acc_dict[k] for k in ["mAP", "mar", "mcap", "mcar"]] + [iou_thresh, conf_thresh]
+                kwargs["logger"].info(str(max_))
+    amax = zip(["mAP", "mar", "mcap", "mcar"] + ["iou_thresh", "conf_thresh"], max_)
+    kwargs["logger"].info("Final Params: " + str(amax))
     
 def test(iterator, kwargs, networks, fns):
     tv = TrainVal(iterator,kwargs, fns, networks)
-    MAP = tv.test()
-    print MAP, iou_thresh, conf_thresh
+    final_acc_dict = tv.test()
+    
 
+def get_fmaps(iterator, kwargs, networks, fns):
+    tv = TrainVal(iterator,kwargs, fns, networks)
+    tv.get_encoder_fmaps()
+
+def get_ims(iterator, kwargs, networks, fns):
+    tv = TrainVal(iterator,kwargs, fns, networks)
+    tv.postproc_ims()
+    
+    
     
          
+
+
+
+
 

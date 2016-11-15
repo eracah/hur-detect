@@ -17,7 +17,7 @@ import inspect
 from lasagne.nonlinearities import *
 from lasagne.objectives import *
 from lasagne.layers import dnn
-from helper_fxns import get_detec_loss,get_all_boxes, get_MAP, softmax3D, softmax4D
+from helper_fxns import get_detec_loss, softmax3D, softmax4D, AccuracyGetter
 import copy
 #if __name__ == "__main__":
     #from data_loader import load_classification_dataset, load_detection_dataset
@@ -114,7 +114,7 @@ def build_layers(input_var, nk):
         
 
     encoder = conv
-    
+    hid_fmap = conv
     
  
     if nk["yolo_batch_norm"]:
@@ -168,7 +168,7 @@ def build_layers(input_var, nk):
 
     
     
-    return {'yolo': bbox_reg, 'ae':conv}#, "decoder":decoder_layers}
+    return {'yolo': bbox_reg, 'ae':conv, 'hid_fmap':hid_fmap}#, "decoder":decoder_layers}
         
 
 def load_weights(pickle_file_path, network):
@@ -190,22 +190,28 @@ def make_fns(networks,input_var, target_var, kwargs ):
     
     yolo = networks['yolo']
     ae = networks['ae']
+    hid_fmap = networks['hid_fmap']
     yolo_test_prediction = lasagne.layers.get_output(yolo, deterministic=True, inputs=input_var)
     yolo_prediction = lasagne.layers.get_output(yolo, deterministic=False,inputs=input_var)
     
     ae_test_prediction = lasagne.layers.get_output(ae, deterministic=True,inputs=input_var)
     ae_prediction = lasagne.layers.get_output(ae, deterministic=False,inputs=input_var)
+    hid_fmap_pred = get_output(hid_fmap, deterministic=True, inputs=input_var)
+    
+    def make_hid_fn():
+        hid_fn = theano.function([input_var], hid_fmap_pred)
+        return hid_fn
     
     def make_loss(yolo_pred, ae_pred):
-        w_yolo_loss, raw_yolo_loss, weight_decay_term, terms = make_yolo_loss(yolo_pred)
+        yolo_loss, terms = make_yolo_loss(yolo_pred)
         ae_loss = make_ae_loss(ae_pred)
         
         #just to make sure we don't compute this if we don't want to
         if kwargs['lambda_ae'] == 0.:
-            loss = w_yolo_loss
+            loss = yolo_loss
         else:
-            loss = w_yolo_loss + kwargs['lambda_ae'] * ae_loss
-        return loss, w_yolo_loss, ae_loss, raw_yolo_loss, weight_decay_term, terms
+            loss = yolo_loss + kwargs['lambda_ae'] * ae_loss
+        return loss, yolo_loss, ae_loss, terms
     
     def make_yolo_loss(pred):
         yolo_loss, terms = get_detec_loss(pred, target_var, kwargs)
@@ -213,7 +219,7 @@ def make_fns(networks,input_var, target_var, kwargs ):
         weightsl2 = lasagne.regularization.regularize_network_params(yolo, lasagne.regularization.l2)
         weight_decay_term = kwargs['weight_decay'] * weightsl2
         loss = yolo_loss + weight_decay_term
-        return loss, yolo_loss, weight_decay_term, terms
+        return loss, terms
     
     def make_ae_loss(pred):
         loss = squared_error(pred, input_var)
@@ -221,41 +227,48 @@ def make_fns(networks,input_var, target_var, kwargs ):
         loss += kwargs['weight_decay'] * weightsl2
         return loss.mean()
         
-    def make_train_fn():
+    
+    
+
+    def make_train_fn(test=False):
         '''takes as input the input, target vars and ouputs a loss'''
+        if test:
+            loss, yolo_loss, ae_loss, terms =  make_loss(yolo_test_prediction, ae_test_prediction)
+        else:   
+            loss, yolo_loss, ae_loss, terms =  make_loss(yolo_prediction, ae_prediction)
         
-        loss, w_yolo_loss, ae_loss, raw_yolo_loss, weight_decay_term, terms =  make_loss(yolo_prediction, ae_prediction)
-        
-        term1,term2,term3,term4,term5 = terms
+        #coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term = terms
+        terms = T.stack(terms)
         #only using params from yolo here -> because decoder has no new params -> tied weights
-        params = lasagne.layers.get_all_params(yolo, trainable=True) #+ lasagne.layers.get_all_params(ae, trainable=True)
-        updates = lasagne.updates.adam(loss, params,learning_rate=kwargs['learning_rate'])
-        if kwargs['lambda_ae'] != 0:
-            train_fn = theano.function([input_var, target_var], [loss,ae_loss,
-                                                                 w_yolo_loss, raw_yolo_loss,
-                                                                 weight_decay_term, term1,term2,
-                                                                 term3,term4,term5], 
-                                                                 updates=updates)
+        if not test:
+            params = lasagne.layers.get_all_params(yolo, trainable=True) #+ lasagne.layers.get_all_params(ae, trainable=True)
+            updates = lasagne.updates.adam(loss, params,learning_rate=kwargs['learning_rate'])
+
+            fn = theano.function([input_var, target_var], [loss,ae_loss,
+                                                                yolo_loss, terms ], 
+                                                                updates=updates)
         else:
-            train_fn = theano.function([input_var, target_var], 
-                                       [w_yolo_loss, raw_yolo_loss, weight_decay_term, term1,term2,term3,term4,term5],
-                                       updates=updates)
-        return train_fn
+            fn = theano.function([input_var, target_var], [loss,ae_loss,
+                                                    yolo_loss, terms ])
+        
+        def fxn(inp, target):
+            loss, ae_loss, yolo_loss, terms = fn(inp, target)
+            coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term = terms
+            
+            return dict(loss=loss, ae_loss=ae_loss, 
+                        yolo_loss=yolo_loss, 
+                        coord_term=coord_term, size_term=size_term, conf_term=conf_term, 
+                        no_obj_conf_term=no_obj_conf_term, xentropy_term=xentropy_term)
+            
+            
+            
+            
+        return fxn
         
     
     def make_test_or_val_fn():
-        '''takes as input the input, target vars and ouputs a non-dropout loss and an accuracy (intersection over union)'''
-        test_loss, w_yolo_loss, ae_loss, raw_yolo_loss, weight_decay_term, terms = make_loss(yolo_test_prediction,ae_test_prediction)
-        term1,term2,term3,term4,term5 = terms
-        if kwargs['lambda_ae'] != 0:
-            val_fn = theano.function([input_var, target_var], [test_loss,ae_loss,
-                                                                 w_yolo_loss, raw_yolo_loss,
-                                                                 weight_decay_term, term1,term2,
-                                                                 term3,term4,term5])
-        else:
-            val_fn = theano.function([input_var, target_var], [w_yolo_loss, raw_yolo_loss, 
-                                                               weight_decay_term, term1,term2,term3,term4,term5])
-        return val_fn
+        
+        return make_train_fn(test=True)
     
     
 
@@ -274,19 +287,27 @@ def make_fns(networks,input_var, target_var, kwargs ):
         def box_fn(x, y, num_classes=kwargs['num_classes']):
             y_tensor = y
             pred_tensor = pred_fn(x)
-            pred_boxes, gt_boxes = get_all_boxes(pred_tensor=pred_tensor, 
-                                                 y_tensor=y_tensor, 
-                                                 num_classes=num_classes, conf_thresh=kwargs["conf_thresh"])
+            acc_obj = AccuracyGetter(kwargs)
+            pred_boxes, gt_boxes = acc_obj.get_all_boxes(pred_tensor=pred_tensor, 
+                                                 y_tensor=y_tensor)
             return pred_boxes, gt_boxes
         return box_fn
+    
+   
+        
             
     def make_map_fn():
         '''takes as input the input, target vars and outputs the predicted and the ground truth boxes)'''
         pred_fn = make_yolo_pred_fn()
-        def MAP_fn(inp, gt, conf_thresh=0.7, iou_thresh=0.5,num_classes=4):
+        def MAP_fn(inp, gt, conf_thresh=None, iou_thresh=None):
             pred = pred_fn(inp)
-            MAP, tp, n, MAR = get_MAP(pred,gt, conf_thresh,iou_thresh, num_classes)
-            return MAP, tp, n, MAR
+            if conf_thresh is not None:
+                kwargs["conf_thresh"] = conf_thresh
+            if iou_thresh is not None:
+                kwargs["iou_thresh"] = iou_thresh
+            acc_getter = AccuracyGetter(kwargs)
+            acc_dict = acc_getter.get_MAP(pred,gt)
+            return acc_dict
     
         return MAP_fn
     
@@ -296,15 +317,19 @@ def make_fns(networks,input_var, target_var, kwargs ):
     yolo_pred_fn = make_yolo_pred_fn()
     ae_pred_fn = make_ae_pred_fn()
     box_fn = make_box_fn()
-    
-    return {"tr":train_fn, "val":test_or_val_fn, "MAP": MAP_fn, "rec": ae_pred_fn, "box": box_fn}
+    hid_fn = make_hid_fn()
+    return {"tr":train_fn, "val":test_or_val_fn, "MAP": MAP_fn, "rec": ae_pred_fn, "box": box_fn, "hid": hid_fn}
 
 
 
+# import theano
 
+# a = theano.tensor.scalar()
+# b = theano.tensor.scalar()
+# c = theano.tensor.scalar()
+# x = theano.tensor.stack([a, b, c])
 
-
-128 / 32
+# x.eval({a:2,b:3,c:4})
 
 
 
