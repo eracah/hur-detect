@@ -15,11 +15,12 @@ import logging
 from os.path import join, exists
 from os import mkdir, makedirs
 from collections import Counter
-
-
+from helper_fxns import *
+from sklearn.metrics import average_precision_score
 
 class TrainVal(object):
     def __init__(self, iterator, kwargs, fns, networks):
+        self.metrics = {}
         self.kwargs = kwargs
         self.iterator = iterator
         self.fns = fns
@@ -66,72 +67,104 @@ class TrainVal(object):
     def _do_one_epoch(self, type_="tr"):
         print "beginning epoch %i" % (self.epoch)
         start_time = time.time()
-        metrics_tots = {}
+        loss_tots = {}
+        acc_tots = {}
         batches = 0
         if type_ == "tr":
             it_kwargs = self.tr_kwargs
         else:
             it_kwargs = self.val_kwargs
+            
         for x,y in self.iterator(**it_kwargs).iterate():
-            loss_dict = self.fns[type_](x,y)
-            
-            acc_dict = self.fns["MAP"](x,y, iou_thresh=self.kwargs['iou_thresh'],
-                                            conf_thresh=self.kwargs['conf_thresh'])
-            
-            pred_boxes, gt_boxes = self.fns["box"](x,y)
-        
+            loss_dict, acc_dict = self.do_one_iteration(x,y,type_)
             
             
-            
-            if self.epoch % 2 == 0:
-                if self.kwargs["ignore_plot_fails"]:
-                    try:
-                        self.plot_ims(x, y, type_, batches)
-                    except:
-                        pass
-                else:
-                    self.plot_ims(x, y, type_, batches)
-    
-            
-    
-            loss_acc_dict = loss_dict.update(acc_dict)
-
-            for k in loss_acc_dict.keys():
+            for k in loss_dict.keys():
                 key = type_ + "_" + k
-                if key not in metrics_tots:
-                    metrics_tots[key] = 0
-                metrics_tots[key] += acc_dict[k]
+                loss_tots = add_as_running_total(key,loss_dict[k], loss_tots)
             
+                        
+            for k in acc_dict.keys():
+                key = type_ + "_" + k
+                acc_tots = add_as_extension(key,acc_dict[k], acc_tots)
+            
+            if not self.kwargs["no_plots"]:
+                self.do_plots(x, y, type_, batches)
+                           
    
             batches += 1
-        del x
-        del y
-        assert batches > 0
-        for k,v in metrics_tots.iteritems():
-            if k not in self.metrics:
-                self.metrics[k] = []
-            self.metrics[k].append(v / batches)
-        self.metrics[type_ + "_time"].append(time.time() - start_time)
-        
-        
-        best_metrics = ["val_mAP", "val_loss", "val_rec_loss"]
-        
-        # if most recent validation
-        for k in best_metrics:
-            if len(self.metrics) > 1:
-                if self.metrics[k][-1] > max(self.metrics[k][:-1]):
-                    self.save_weights("yolo", "best_" + k)
-            else:
-                self.save_weights("yolo", "best_" + k)
 
-            
-
-            
-                
-        self.save_weights("yolo", "cur")
-        self.save_weights("ae", "cur")
-        
     
+        self.postprocess_epoch(type_,loss_tots,acc_tots, start_time, batches)
+      
+        if type_ == "val":
+            self.save_weights()
+        
+
+    def postprocess_epoch(self, type_, loss_tots,acc_tots, start_time, batches):
+        assert batches > 0
+                
+        loss_tots = {k: v / float(batches) for k,v in loss_tots.iteritems()}
+        acc_tots_by_class = {}
+        for k in range(self.kwargs["num_classes"]):
+            print self.classes[k]
+
+            acc_tots_by_class[self.classes[k] + "_ap"] = average_precision_score(acc_tots[type_ + "_gt_" + str(k)],
+                                                        acc_tots[type_ + "_pred_" + str(k)])
+        
+        print acc_tots_by_class
+
+        mAP = np.mean(acc_tots_by_class.values())
+        
+        for k,v in loss_tots.iteritems():
+            if not isinstance(v, float):
+                print "adding ", k, " equal to ", v
+            self.metrics = add_as_appension(type_ + "_" + k,v,self.metrics)
+        
+        for k,v in acc_tots_by_class.iteritems():
+            if not isinstance(v, float):
+                print "adding ", k, " equal to ", v
+            self.metrics = add_as_appension(type_ + "_" + k,v,self.metrics)
+        
+        if not isinstance(mAP, float):
+                print "adding ", "map", " equal to ", mAP
+        self.metrics = add_as_appension(type_ + "_mAP", mAP,self.metrics)
+        
+        time_key = type_ + "_time"
+        self.metrics = add_as_appension(time_key,time.time() - start_time, self.metrics)
+        
+        
+    def do_one_iteration(self, x,y,type_):
+        loss_dict = self.fns[type_](x,y)
+            
+        acc_dict = self.fns["acc"](x,y, iou_thresh=self.kwargs['iou_thresh'],
+                                            conf_thresh=self.kwargs['conf_thresh'])            
+           
+        return loss_dict, acc_dict #, pred_boxes, gt_boxes
+    
+    def save_weights(self):
+        max_metrics = ["val_mAP"]
+        min_metrics = ["val_loss"]
+        for k in max_metrics:
+            if len(self.metrics[k]) > 1:
+                if self.metrics[k][-1] > max(self.metrics[k][:-1]):
+                    self._save_weights("yolo", "best_" + k)
+        
+        
+            else:
+                self._save_weights("yolo", "best_" + k)
+        for k in min_metrics:
+            if len(self.metrics[k]) > 1:
+                if self.metrics[k][-1] < min(self.metrics[k][:-1]):
+                    self._save_weights("yolo", "best_" + k)
+
+
+
+
+
+        self._save_weights("yolo", "cur")
+        self._save_weights("ae", "cur")
+        
     def _test(self,it_kwargs, iou_thresh=None, conf_thresh=None):
         inps = []
         batches = 0 
@@ -192,7 +225,7 @@ class TrainVal(object):
                 j+=1
                 self.plot_ims(x,y,"test", j)
         
-    def save_weights(self,name,suffix=""):
+    def _save_weights(self,name,suffix=""):
         params = get_all_param_values(self.networks[name])
         model_dir = join(self.kwargs['save_path'], "models")
         self.makedir_if_not_there(model_dir)
@@ -214,6 +247,7 @@ class TrainVal(object):
                 self.kwargs['logger'].info("\tValidation took {:.3f}s".format(self.metrics["val_time"][-1]))
             for k,v in self.metrics.iteritems():
                 if typ in k[:4] and "time" not in k:
+                    print v[-1]
                     if "acc" in k:
                         self.kwargs['logger'].info("\t\t" + k + ":\t\t{:.4f} %".format(v[-1] * 100))
                     else:
@@ -224,29 +258,51 @@ class TrainVal(object):
     def plot_learn_curve(self):
         for k in self.metrics.keys():
             if "time" not in k:
-                self._plot_learn_curve(k.split("_")[1])
+                k = k.replace("tr_", "")
+                k = k.replace("val_", "")
+                self._plot_learn_curve(k)
         
-    def _plot_learn_curve(self,type_):
+    def _plot_learn_curve(self,metric):
         plt.clf()
         plt.figure(1)
         plt.clf()
-        plt.title('Train/Val %s' %(type_))
-        plt.plot(self.metrics['tr_' + type_], label='train ' + type_)
-        plt.plot(self.metrics['val_' + type_], label='val ' + type_)
-        plt.legend( loc = 'center left', bbox_to_anchor = (1.0, 0.5),
-           ncol=2)
+        ax = plt.subplot(111)
+        ax.set_title('Train/Val %s' %(metric))
+        ax.plot(self.metrics['tr_' + metric], label='train ' + metric)
+        ax.plot(self.metrics['val_' + metric], label='val ' + metric)
+        # Shrink current axis's height by 10% on the bottom
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                         box.width, box.height * 0.9])
+
+        # Put a legend below current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
+                  fancybox=True, shadow=True, ncol=5)
+
 
         curves_path = join(self.kwargs['save_path'], "learn_curves")
         self.makedir_if_not_there(curves_path)
-        plt.savefig("%s/%s_learning_curve.png"%(curves_path,type_))
-        pass
+        plt.savefig("%s/%s_learning_curve.png"%(curves_path,metric))
+        #pass
         plt.clf()
         
     
-    
-    def plot_ims(self, x, y, type_, num):
+    def do_plots(self,x,y,type_, num):
         if num >= self.max_ims:
             return
+        if self.epoch % 2 == 0:
+            if self.kwargs["ignore_plot_fails"]:
+                try:
+                    self.plot_ims(x, y, type_, batches)
+                except:
+                    pass
+            else:
+                self.plot_ims(x, y, type_, batches)
+    
+    def plot_ims(self, x, y, type_, num):
+
+
+
         pred_boxes, gt_boxes = self.fns['box'](x,y)
         self._plot_im_with_boxes(x,pred_boxes, gt_boxes, num=num, name=type_)
         if self.kwargs['lambda_ae'] != 0:
@@ -322,7 +378,7 @@ class TrainVal(object):
         plt.savefig("%s/%s_boxes_%i.png"%(box_dir, name, num))
         self.save_out_boxes(box_dir, "ten_most_conf_boxes", pred_boxes[0], gt_boxes[0])
         
-        pass
+        #pass
         plt.clf()
 
     
@@ -396,13 +452,11 @@ class TrainVal(object):
         if self.epoch % 4 == 0:           
             plt.savefig("%s/%s_epoch_%i_rec_%i.png"%(rec_dir, name, self.epoch, num))
         plt.savefig("%s/%s_rec_%i.png"%(rec_dir, name, num))
-        pass
+        #pass
         plt.clf()
         
 
         
-
-
 
 def train(iterator, kwargs, networks, fns):
     print "Starting training..." 
@@ -445,6 +499,14 @@ def get_ims(iterator, kwargs, networks, fns):
     
     
          
+
+
+
+a="tr_bool"
+
+
+
+a.replace("mon", "")
 
 
 

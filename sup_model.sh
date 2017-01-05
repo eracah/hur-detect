@@ -1,6 +1,6 @@
 
 
-script=gpu"$1"_run_yolo.sh
+script="gpu_run_yolo.sh $1"
 shift
 echo $@
 ./$script --lambda_ae 0  $@

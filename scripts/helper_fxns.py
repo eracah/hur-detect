@@ -14,6 +14,17 @@ import os
 # from print_n_plot import plot_ims_with_boxes, add_bbox, plot_im_with_box
 from copy import deepcopy
 from collections import Counter
+from os.path import join, exists
+from os import mkdir, makedirs
+
+
+
+def makedir_if_not_there(dirname):
+    if not exists(dirname):
+        try:
+            mkdir(dirname)
+        except OSError:
+            makedirs(dirname)
 
 
 
@@ -51,37 +62,118 @@ def smoothL1(x):
 
 
 
+def add_as_appension(key, val, dict_,):
+    if key not in dict_:
+        dict_[key] = []
+    dict_[key].append(val)
+    return dict_
+
+def add_as_extension(key, val, dict_):
+    if key not in dict_:
+        dict_[key] = []
+    dict_[key].extend(val)
+    return dict_
+
+def add_as_running_total(key,val,dict_):
+    if key not in dict_:
+        dict_[key] = 0
+    dict_[key] += val
+    return dict_
+
+
+
 class AccuracyGetter(object):
     def __init__(self,kwargs):
         self.kwargs = kwargs
         self.class_name_dict = dict(zip(range(4),["td", "tc", "etc", "ar"], ))
 
-    def get_MAP(self, pred_tensor,y_tensor):
-        # gets two N x 9 x 12 x 18 tensors?
-        #return a float, and two lists of N dictionaries
-        # each dict has num_class keys pointing to a list of some number of box coords
-        #print pred_tensor.shape, y_tensor.shape
-    #     print pred_tensor.shape
-    #     print y_tensor.shape
-#         print sum(
-#     (Counter(dict(x)) for x in input),
-#     Counter())
-        inp = []
+    def get_scores(self, pred_tensor,y_tensor):
+        pred_confs_tot = {}
+        gt_confs_tot = {"gt_" + str(k):[] for k in range(self.kwargs["num_classes"])}
+        pred_confs_tot = {"pred_" + str(k) :[] for k in range(self.kwargs["num_classes"])}
         for i in range(pred_tensor.shape[0]):
 
             pred_boxes, gt_boxes = self.get_boxes(pred_tensor[i], y_tensor[i])
-            acc_dict = self.get_ap(pred_boxes, gt_boxes)
-            inp.append(acc_dict)
-        
-        
-        sums = sum((Counter(dict(x)) for x in inp),Counter())
-        for k in inp[0].keys():
-            if k not in sums.keys():
-                sums[k] = 0.0
-        final_acc_dict = {k: float(v) / pred_tensor.shape[0] for k,v in sums.iteritems() }
-#         print "getMap", final_acc_dict
-        return final_acc_dict
+            pred_confs, gt_confs = self.get_pred_and_gt_scores(pred_boxes,gt_boxes)
+            for k in pred_confs.keys():
+                pred_confs_tot["pred_" + str(k)].extend(pred_confs[k])
+                gt_confs_tot["gt_" + str(k)].extend(gt_confs[k])
+                
+        pred_confs_tot.update(gt_confs_tot)
+        return pred_confs_tot
+            
 
+
+#     def get_ap(self, pred_boxes,gt_boxes):
+#         '''pred boxes and gt_boxes is a dictionary key (class integer): value: list of boxes'''
+        
+#         aps = {k: average_precision_score(gt_confs[k], pred_confs[k])}
+    
+ 
+    def get_pred_and_gt_scores(self, pred_boxes,gt_boxes):
+        '''input: bbox lists for predicted and ground truth (gt) boxes
+           each element in list is a list -> [x, y, w, h, confidence, class]
+        output: 
+                pred_confs: dictionary, where keys are classes and values are list confidences for each bounding box for that class
+                gt_confs: dictionary where keys are classes and values are list of binary variables, corresponding to crrectness of 
+                    each element in corresponding lists in pred_confs'''
+                
+        
+        
+        #dict where key is class, value is list of boxes predicted as that class
+        pred_boxes_by_class = {k: [p for p in pred_boxes if p[5] ==k] for k in range(self.kwargs["num_classes"])}
+        
+        #dict where key is class, value is list of ground truth boxes for that class
+        gt_boxes_by_class = {k:[g for g in gt_boxes if g[5] == k] for k in range(self.kwargs["num_classes"]) }
+        
+        #dict where key is class, value is list of confidences for each box guess
+        pred_confs = {k:[] for k in range(self.kwargs["num_classes"]) }
+        
+        #dict where key is class, value is list of binary variables, where 1 means, there is a ground truth box
+        #for the corresponding guess in pred_confs
+        gt_confs = {k:[] for k in range(self.kwargs["num_classes"])}
+        
+
+ 
+        gt_boxes_byc = deepcopy(gt_boxes_by_class)
+
+        #for each predicted box (in order from highest conf to lowest)
+        for c in pred_boxes_by_class.keys():
+            for pc_box in pred_boxes_by_class[c]:
+                conf = pc_box[4]
+                cls = pc_box[5]
+                ious = np.asarray([self.iou(pc_box, gc_box) for gc_box in gt_boxes_byc[c] ])
+                
+                # get all gt boxes that have iou with given box over the threshold
+                C = [ind for ind, gc_box in enumerate(gt_boxes_byc[c]) if ious[ind] > self.kwargs["iou_thresh"] ]
+                
+                #this means there is at least once gt box that overlaps over 
+                #the IOU threshold with predicted
+                if len(C) > 0:
+                    # if there are some gt ones that are over the threshold
+                    # grab the highest one in terms of iou
+                    max_ind = np.argmax(ious)
+                    
+                    
+                    # remove this box from consideration
+                    del gt_boxes_byc[c][max_ind]
+                    
+                    #add the confidence to the prediction
+                    pred_confs[c].append(conf)
+                    #add a 1 to the ground truth
+                    gt_confs[c].append(1)
+                
+                #no box overlaps with the guess. Put a zero for ground truth here
+                else:
+                    pred_confs[cls].append(conf)
+                    gt_confs[c].append(0)
+        
+
+        return pred_confs, gt_confs
+
+
+
+    
     def get_all_boxes(self, pred_tensor,y_tensor):
         all_gt_boxes = []
         all_pred_boxes = []
@@ -102,90 +194,6 @@ class AccuracyGetter(object):
         #print len(gt_boxes)
         return pred_boxes, gt_boxes
 
-
-
-
-
-
-    def get_ap(self, pred_boxes,gt_boxes):
-        '''pred boxes and gt_boxes is a dictionary key (class integer): value: list of boxes'''
-        chosen_boxes = []
-        wrong_chosen_boxes = []
-        z = []
-        zc = []
-        
-        #dict matching class to total number of Tp's for that class
-        gtd = {k:len([g for g in gt_boxes if g[5] == k]) for k in range(self.kwargs["num_classes"]) }
-        pzd = {k:[] for k in range(self.kwargs["num_classes"]) }
-        
-
-    # #for each class
-    #     #sort boxes by confidence for given class
-    #     #print pred_boxes[c]
-
-    #     #print pred_boxes[c]
-    #     #grab boxes for that class
-    #     pc_boxes = pred_boxes[c]
-        gc_boxes = deepcopy(gt_boxes)
-
-        #for each predicted box (in order from highest conf to lowest)
-        for pc_box in pred_boxes:
-            conf = pc_box[4]
-            cls = pc_box[5]
-            #print conf
-            if conf < self.kwargs["conf_thresh"]:
-                continue
-            #get all ious for that box with gt box
-            ious = np.asarray([self.iou(pc_box, gc_box) for gc_box in gc_boxes ])
-            # get all gt boxes that have iou with given box over the threshold
-            C = [ind for ind, gc_box in enumerate(gc_boxes) if ious[ind] > self.kwargs["iou_thresh"] ]
-            if len(C) > 0:
-                # if there are some gt ones that are over the threshold
-                # grab the highest one in terms of iou
-                max_ind = np.argmax(ious)
-                g_cls = gc_box[5]
-                # remove this box from consideration
-                del gc_boxes[max_ind]
-                #plop a true positive into the array
-
-                if cls == g_cls:
-                    zc.append(1)
-                    pzd[cls].append(1)
-                else:
-                    zc.append(0)
-                    pzd[cls].append(0)
-                #keep that box around
-                chosen_boxes.append(pc_box)
-                z.append(1)
-            else:
-                pzd[cls].append(0)
-                zc.append(0)
-                z.append(0)
-                # keep that box around also?
-                wrong_chosen_boxes.append(pc_box)
-
-        n = len(z)
-        tp = sum(z)
-        tpc = sum(zc)
-
-
-        ap = float(tp) / n if n > 0 else 0.
-        ar = float(tp) / len(gt_boxes) if len(gt_boxes) > 0 else 0.
-        cap = float(tpc) / n if n > 0 else 0.
-        car = float(tpc) / len(gt_boxes) if len(gt_boxes) > 0 else 0.
-        
-        clar = {self.class_name_dict[cls] + "_recall":float(sum(pzd[cls])) / gtd[cls] if gtd[cls] > 0 else 0. for cls in range(self.kwargs["num_classes"]) }
-        clap = {self.class_name_dict[cls] + "_precision":float(sum(pzd[cls])) / len(pzd[cls]) if len(pzd[cls]) > 0 else 0. for cls in range(self.kwargs["num_classes"]) }
-        d = dict(mAP=ap, mar=ar, mcap=cap, mcar=car, n=n, tp=tp)
-        d.update(clar)
-        d.update(clap)
-#         print "get_ap", d
-        return d
-
-            #for pred_clsi_box in pred_clsi_boxes
-
-
-
     def get_boxes_from_tensor(self, tensor):
         #tensor is numpy tensor
         x_g, y_g = tensor.shape[-2], tensor.shape[-1]
@@ -200,8 +208,8 @@ class AccuracyGetter(object):
                 conf = coords[-1]
                 cls = np.argmax(tensor[6:,i,j]) # + 1 # cuz classes go from 1 to4
                 box.append(cls)
-                if conf > self.kwargs["conf_thresh"]:
-                    boxes.append(box)
+                #if conf > self.kwargs["conf_thresh"]:
+                boxes.append(box)
 
         #sort by confidence
         boxes.sort(lambda a,b: -1 if a[4] > b[4] else 1)        
@@ -288,7 +296,7 @@ def get_detec_loss(pred, gt, kwargs):
 
     #term3
     #get sum of squared diff between confidence for places with actual boxes of pred vs. ground truth
-    s_c  = -T.log(tp_obj[:,cs])
+    s_c  = -T.log(tp_obj[:,cs]+ 0.00001)
     raw_loss3 = T.sum(s_c)
     sterm3 = raw_loss3
 
@@ -299,7 +307,7 @@ def get_detec_loss(pred, gt, kwargs):
     tp_no_obj = pred[no_ind.nonzero()]
 
     #get the log likelhood that there isn't a box
-    s_nc = -T.log(tp_no_obj[:,csn])
+    s_nc = -T.log(tp_no_obj[:,csn]+ 0.00001)
 
     raw_loss4 = T.sum(s_nc)
 

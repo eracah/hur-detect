@@ -16,7 +16,10 @@ from copy import deepcopy
 import inspect
 from lasagne.nonlinearities import *
 from lasagne.objectives import *
-from lasagne.layers import dnn
+import os
+
+if "THEANO_FLAGS" in os.environ and "gpu" in os.environ["THEANO_FLAGS"]:
+        from lasagne.layers import dnn
 from helper_fxns import get_detec_loss, softmax3D, softmax4D, AccuracyGetter
 import copy
 #if __name__ == "__main__":
@@ -103,6 +106,8 @@ def build_layers(input_var, nk):
         if nk["3D"]:
             conv = dnn.Conv3DDNNLayer(conv, num_filters=num_filters, filter_size=(3,5,5),pad=(1,2,2), stride=(1,2,2)) 
         else:
+            #print nk["filters_scale"]
+            #print num_filters
             conv = Conv2DLayer(conv, 
                                   num_filters=num_filters, 
                                   filter_size=nk['filter_dim'], 
@@ -256,9 +261,11 @@ def make_fns(networks,input_var, target_var, kwargs ):
             coord_term, size_term, conf_term, no_obj_conf_term, xentropy_term = terms
             
             return dict(loss=loss, ae_loss=ae_loss, 
-                        yolo_loss=yolo_loss, 
-                        coord_term=coord_term, size_term=size_term, conf_term=conf_term, 
-                        no_obj_conf_term=no_obj_conf_term, xentropy_term=xentropy_term)
+                        yolo_loss=yolo_loss) 
+                        
+                        
+                        #coord_term=coord_term, size_term=size_term, conf_term=conf_term, 
+                        #no_obj_conf_term=no_obj_conf_term, xentropy_term=xentropy_term)
             
             
             
@@ -296,29 +303,29 @@ def make_fns(networks,input_var, target_var, kwargs ):
    
         
             
-    def make_map_fn():
+    def make_acc_fn():
         '''takes as input the input, target vars and outputs the predicted and the ground truth boxes)'''
         pred_fn = make_yolo_pred_fn()
-        def MAP_fn(inp, gt, conf_thresh=None, iou_thresh=None):
+        def acc_fn(inp, gt, conf_thresh=None, iou_thresh=None):
             pred = pred_fn(inp)
             if conf_thresh is not None:
                 kwargs["conf_thresh"] = conf_thresh
             if iou_thresh is not None:
                 kwargs["iou_thresh"] = iou_thresh
             acc_getter = AccuracyGetter(kwargs)
-            acc_dict = acc_getter.get_MAP(pred,gt)
+            acc_dict = acc_getter.get_scores(pred,gt)
             return acc_dict
     
-        return MAP_fn
+        return acc_fn
     
     train_fn = make_train_fn()
     test_or_val_fn = make_test_or_val_fn()
-    MAP_fn = make_map_fn()
+    acc_fn = make_acc_fn()
     yolo_pred_fn = make_yolo_pred_fn()
     ae_pred_fn = make_ae_pred_fn()
     box_fn = make_box_fn()
     hid_fn = make_hid_fn()
-    return {"tr":train_fn, "val":test_or_val_fn, "MAP": MAP_fn, "rec": ae_pred_fn, "box": box_fn, "hid": hid_fn}
+    return {"tr":train_fn, "val":test_or_val_fn, "test":test_or_val_fn, "acc": acc_fn, "rec": ae_pred_fn, "box": box_fn, "hid": hid_fn}
 
 
 
