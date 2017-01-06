@@ -11,61 +11,90 @@
 #Command line args
 
   --shuffle SHUFFLE     shuffle (default: False)
+  
   --dropout_p DROPOUT_P
                         dropout_p (default: 0)
+                        
   --get_ims GET_IMS     get_ims (default: False)
+  
   --labels_only LABELS_ONLY
                         labels_only (default: True)
+                        
   --yolo_load_path YOLO_LOAD_PATH
                         yolo_load_path (default: None)
-  --grid_search GRID_SEARCH
-                        grid_search (default: False)
+                        
+
+                        
   --num_extra_conv NUM_EXTRA_CONV
                         num_extra_conv (default: 0)
+                        
   --save_path SAVE_PATH
                         save_path (default: None)
+                        
   --filters_scale FILTERS_SCALE
                         filters_scale (default: 1.0)
-  --momentum MOMENTUM   momentum (default: 0.9)
+                        
+  
   --scale_factor SCALE_FACTOR
                         scale_factor (default: 64)
+                        
   --num_ims_to_plot NUM_IMS_TO_PLOT
                         num_ims_to_plot (default: 8)
+                        
   --input_shape INPUT_SHAPE
                         input_shape (default: (None, 16, 768, 1152))
+                        
   --save_weights SAVE_WEIGHTS
                         save_weights (default: True)
+                        
   --use_fc USE_FC       use_fc (default: False)
+  
   --filter_dim FILTER_DIM
                         filter_dim (default: 5)
+                        
   --coord_penalty COORD_PENALTY
                         coord_penalty (default: 5)
+                        
   --box_sizes BOX_SIZES
                         box_sizes (default: [(64, 64)])
+                        
   --val_years VAL_YEARS
                         val_years (default: [1982, 1986])
+                        
   --metadata_dir METADATA_DIR
                         metadata_dir (default:
                         /storeSSD/eracah/data/metadata/)
+                        
   --batch_norm BATCH_NORM
                         batch_norm (default: False)
+                        
   --tr_years TR_YEARS   tr_years (default: [1979, 1980, 1981, 1983, 1985,
                         1987])
+                        
   --epochs EPOCHS       epochs (default: 10000)
+  
   --size_penalty SIZE_PENALTY
                         size_penalty (default: 7)
+                        
   --num_layers NUM_LAYERS
                         num_layers (default: 6)
+                        
   --num_test_days NUM_TEST_DAYS
                         num_test_days (default: 365)
+                        
   --weight_decay WEIGHT_DECAY
                         weight_decay (default: 0.0005)
+                        
   --3D 3D               3D (default: False)
+  
   --ae_load_path AE_LOAD_PATH
                         ae_load_path (default: None)
+                        
   --lambda_ae LAMBDA_AE
                         lambda_ae (default: 10)
+                        
   --data_dir DATA_DIR   data_dir (default: /storeSSD/eracah/data/netcdf_ims)
+  
   --test TEST           test (default: False)
 
   --time_chunks_per_example TIME_CHUNKS_PER_EXAMPLE
