@@ -160,7 +160,7 @@ class BBoxIterator(object):
                  time_chunks_per_example=1,
                  no_labels_only=False,
                  time_stride=None, 
-                 scale_factor=64., seed =5):
+                 scale_factor=64., seed =5, box_sizes=[(64,64)]):
         
         frame = inspect.currentframe()
         self.set_data_members(frame)
@@ -400,7 +400,7 @@ class BBoxIterator(object):
 
 
         x_len,y_len = self.xdim / int(scale_factor), self.ydim / int(scale_factor)
-        last_dim = 6 + num_classes #x,y,w,h,c plus num_classes for one hot encoding
+        last_dim = 6 + num_classes #x,y,w,h,conf1,conf2 plus num_classes for one hot encoding
 
 
         #divide up bbox with has range 0-95 to 0-95/scale_factor (so 6x6 for scale factor of 16)
@@ -421,7 +421,7 @@ class BBoxIterator(object):
         xywh[:,:,:2] -= inds[:,:,:2].astype('float')
 
 
-        #divide by scaled width and height to get wdith and height relative to width and height of image (width is just xrange, height is yrange)
+        #divide by scaled width and height to get wdith and height relative to width and height of box
         xywh[:,:,2] = np.log2(bbox_coords[:,:,2] / scale_factor)
         xywh[:,:,3] = np.log2(bbox_coords[:,:,3] / scale_factor)
 
@@ -603,47 +603,26 @@ def get_percents(event_dict):
 
 
 
-get_percents(count_events(1979))
+# get_percents(count_events(1979))
 
+# count_events(1984)
 
+# count_events_md(1982)
 
-count_events(1984)
+# count_events_md(1985)
 
+# get_percents(count_events(1984))
 
+# 365 * 8
 
-count_events_md(1982)
+# metadata_dir = "/storeSSD/eracah/data/metadata/"
 
+# labeldf = pd.read_csv(join(metadata_dir, '_'.join([str(1979),"tc", 'labels.csv'])))
 
+# len(labeldf[labeldf["str_category"] == "tropical_depression"])
 
-count_events_md(1985)
+# len(labeldf[labeldf["str_category"] == "tropical_cyclone"])
 
-
-
-get_percents(count_events(1984))
-
-
-
-365 * 8
-
-
-
-metadata_dir = "/storeSSD/eracah/data/metadata/"
-
-
-
-labeldf = pd.read_csv(join(metadata_dir, '_'.join([str(1979),"tc", 'labels.csv'])))
-
-
-
-len(labeldf[labeldf["str_category"] == "tropical_depression"])
-
-len(labeldf[labeldf["str_category"] == "tropical_cyclone"])
-
-
-
-range(1,3)
-
-
-
+# range(1,3)
 
 

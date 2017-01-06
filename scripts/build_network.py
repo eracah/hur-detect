@@ -145,7 +145,7 @@ def build_layers(input_var, nk):
             #print get_output_shape(net,input_shapes=(1,16,8,768,1152))
             # after transpose
             s = get_output_shape(net)
-            bbox_reg = ReshapeLayer(net, shape=(nk["batch_size"]*s[1], s[2],s[3], s[4]))
+            bbox_reg = ReshapeLayer(net, shape=(nk["batch_size"],s[1], s[2],s[3], s[4]))
             #print get_output_shape(bbox_reg,input_shapes=(1,16,8,768,1152))
             
             
