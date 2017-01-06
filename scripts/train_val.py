@@ -15,8 +15,8 @@ import logging
 from os.path import join, exists
 from os import mkdir, makedirs
 from collections import Counter
-from notebooks.print_n_plot import *
-from notebooks.helper_fxns import *
+from scripts.print_n_plot import *
+from scripts.helper_fxns import *
 from sklearn.metrics import average_precision_score
 import copy
 
