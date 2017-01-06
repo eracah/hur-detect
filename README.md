@@ -99,28 +99,40 @@
 
   --time_chunks_per_example TIME_CHUNKS_PER_EXAMPLE
                         time_chunks_per_example (default: 1)
+                        
+                        
   --no_plots NO_PLOTS   no_plots (default: False)
+  
   --learning_rate LEARNING_RATE
                         learning_rate (default: 0.0001)
+                        
   --batch_size BATCH_SIZE
                         batch_size (default: 1)
+                        
   --get_fmaps GET_FMAPS
                         get_fmaps (default: False)
+                        
   --yolo_batch_norm YOLO_BATCH_NORM
                         yolo_batch_norm (default: True)
+                        
   --test_years TEST_YEARS
                         test_years (default: [1984])
+                        
   --iou_thresh IOU_THRESH
                         iou_thresh (default: 0.1)
+                        
   --num_classes NUM_CLASSES
                         num_classes (default: 4)
 
   --conf_thresh CONF_THRESH
                         conf_thresh (default: 0.8)
+                        
   --nonobj_penalty NONOBJ_PENALTY
                         nonobj_penalty (default: 0.5)
+                        
   --num_tr_days NUM_TR_DAYS
                         num_tr_days (default: 365)
+                        
   --ignore_plot_fails IGNORE_PLOT_FAILS
                         ignore_plot_fails (default: 1)
 
