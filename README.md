@@ -1,11 +1,22 @@
-#Instructions for running on Cori batch system:
+#Prerequisites:
+* lasagne
+* theano
+* scikit-learn
+* h5py
 
-* sbatch hur_main.sl #and the below command line arguments
+#running the notebook:
+* open up hur_main.ipynb
+* run it
 
 #Instructions for running from terminal:
 
-* module load deeplearning #or if you are not on cori, put numpy, lasagne, theano, scikit-learn, h5py on your path
-* python hur_main.py  #and the below command line args
+* `module load deeplearning` only needed if you are on Cori
+* `python hur_main.py`  and any below command line args
+
+#Instructions for running on NERSC's Cori batch system:
+
+* `sbatch hur_main.sl` and the below command line arguments
+
 
 
 #Command line args
@@ -136,14 +147,6 @@
   --ignore_plot_fails IGNORE_PLOT_FAILS
                         ignore_plot_fails (default: 1)
 
-#running the notebook:
-* open up hur_main.ipynb
-* run it
 
-#Prerequisites:
-* lasagne
-* theano
-* scikit-learn
-* h5py
 
 
