@@ -35,7 +35,7 @@ class TrainVal(object):
         self.max_ims = self.kwargs['num_ims_to_plot']
         self.networks = networks
         self.print_network(networks)
-        it_list= ['batch_size',"data_dir", "metadata_dir", "shuffle","num_classes",
+        it_list= ["variables",'batch_size',"data_dir", "metadata_dir", "shuffle","num_classes",
                     "labels_only","time_chunks_per_example"]
         
         self.std_it_kwargs = {k:kwargs[k] for k in it_list} 
@@ -76,9 +76,13 @@ class TrainVal(object):
         batches = 0
         it_kwargs = self.it_kwargs[type_]
         
+     
+        t0 = time.time()
         for x,y in self.iterator(**it_kwargs).iterate():
+            print "total iterate time: ", time.time() -t0
+            t= time.time()
             loss_dict, acc_dict = self.do_one_iteration(x,y,type_)
-            
+            print "actual iteration time: ", time.time() - t
             for k in loss_dict.keys():
                 key = type_ + "_" + k
                 loss_tots = add_as_running_total(key,loss_dict[k], loss_tots)
@@ -94,8 +98,10 @@ class TrainVal(object):
                            
    
             batches += 1
-
-        self.postprocess_epoch(type_,loss_tots,acc_tots, start_time, batches)
+            t0 = time.time()
+        t= time.time()
+        self.postprocess_epoch(type_, loss_tots,acc_tots, start_time, batches)
+        print "postprocess time: ", time.time() - t
       
         if type_ == "val":
             self.save_weights()

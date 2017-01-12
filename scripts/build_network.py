@@ -27,6 +27,10 @@ import copy
 
 
 
+from lasagne.layers import dnn
+
+
+
 def get_hyperparams(frame):
     args, _, _, values = inspect.getargvalues(frame)
     #return dict(zip(args,values))
