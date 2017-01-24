@@ -65,3 +65,40 @@ def get_camfiles(data_dir, years):
     camfiles.sort()
     return camfiles
 
+
+
+def interleave_variables(labelled_vars):
+        #get some metadata
+        n_tot_frames = sum([v.shape[0] for v in labelled_vars])
+        xdim = labelled_vars[0].shape[1]
+        ydim = labelled_vars[0].shape[2]
+        time_steps = labelled_vars[0].shape[0]
+        nvar = len(labelled_vars)
+        
+        #interleave each variable together
+        #tmp after this should be len(filenames)*4*nvar,768,1152
+        #nvar = 16 usually
+        tmp=np.empty((n_tot_frames,xdim,ydim ))
+        for i in range(nvar):
+            tmp[i::nvar,:] = labelled_vars[i]
+        
+        #now make tmp len(filenames)*4, 16, 768,1152 array
+        tmp=tmp.reshape((time_steps, nvar, xdim, ydim))
+        return tmp
+
+
+
+def convert_nc_data_to_tensor(dataset,kwargs):
+        #get every variable for every timestep across each file (var[i] is a len(filenames)*4, 768,1152 array )
+        var = [dataset.variables[v][:] for v in kwargs["variables"]]
+
+        #get every other time step (b/c only labelled in every other)
+        labelled_vars = [v[::kwargs["time_step_stride"]] for v in var]
+
+        tensor = interleave_variables(labelled_vars)
+        return tensor
+
+
+
+
+
