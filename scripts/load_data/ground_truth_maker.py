@@ -4,122 +4,160 @@ import matplotlib; matplotlib.use("agg")
 
 import sys
 import numpy as np
-from util import convert_bbox_minmax_to_cent_xywh
 import time
 from label_loader import  make_labels_for_dataset
 
 
 
-def make_yolo_masks_for_dataset( camfile_name, kwargs):
-        t = time.time()
-        labels_tensor = make_labels_for_dataset(camfile_name,kwargs)
-        labels_tensor = convert_bbox_minmax_to_cent_xywh(labels_tensor)
-
-
-        yolo_mask = create_detection_gr_truth(labels_tensor, kwargs)
-        print "make gt masks: ", time.time() -t
+def make_yolo_masks_for_dataset( camfile_name, kwargs, labels_csv_file):
+        box_list = make_labels_for_dataset(camfile_name, labels_csv_file)
+        yolo_mask = create_yolo_gr_truth(box_list, kwargs)
         return yolo_mask
 
 
 
-def create_detection_gr_truth(bbox_tensor,kwargs):
-        #x_xy : 1,2 tuple with x and y sizes for image
-        #scale_factor: factor to scale xy size by fro gr_truth grid for YOLO
-        #scale_factor = float(scale_factor)
-        # xdim, ydim = 768,1152
-        # scale_factor = 64
-        # bbox_tensor = make_labels_for_dataset("cam5_1_amip_run2.cam2.h2.1984-01-03-00000.nc")
-        # num_classes = 4 
-        scale_factor = float(kwargs["scale_factor"])
-        bbox_classes = bbox_tensor[:,:,4]
-        bbox_coords = bbox_tensor[:,:,:4]
-        xdim,ydim = kwargs["xdim"], kwargs["ydim"]
+def get_gr_truth_configs(kwargs):
+    scale_factor = float(kwargs["scale_factor"])
+    xdim, ydim = kwargs["xdim"], kwargs["ydim"]
+    num_classes = kwargs["num_classes"]
+    #make sure xy coords divide cleanly with scale_factor
+    assert xdim % scale_factor == 0 and ydim % scale_factor == 0, "scale factor %i must divide the xy (%i, %i) coords cleanly " %(scale_factor,xdim, ydim)
+    
+    xlen, ylen = xdim / int(scale_factor), ydim / int(scale_factor)
+    
+    #x,y,w,h,conf1,conf2 plus num_classes for one hot encoding
+    last_dim = 6 + num_classes
+    return scale_factor, xlen, ylen, last_dim, num_classes 
+    
+
+
+
+def get_xy_inds(x,y, scale_factor):
+        # get the indices to the lower left corner of the grid
         
-        #make sure xy coords divide cleanly with scale_factor
-        assert xdim % scale_factor == 0 and ydim % scale_factor == 0, "scale factor %i must divide the xy (%i, %i) coords cleanly " %(scale_factor,xdim, ydim)
+        #scale x and y down
+        xs, ys = x / scale_factor, y / scale_factor
+        eps = 10*np.finfo(float).eps
+        #take the floor of x and y -> which is rounding to nearest bottom left corner
+        x_ind, y_ind = [np.floor(k - 10*eps ).astype('int') for k in [xs,ys]]
+        return x_ind, y_ind
+    
 
 
-        x_len,y_len = xdim / int(scale_factor), ydim / int(scale_factor)
-        last_dim = 6 + kwargs["num_classes"] #x,y,w,h,conf1,conf2 plus num_classes for one hot encoding
+
+def get_xy_offsets(x,y, x_ind, y_ind, scale_factor):
+    #scale x and y down
+    xs, ys = x / scale_factor, y / scale_factor
+    
+    #get the offsets by subtracting the scaled lower left corner coords from the scaled real coords
+    xoff, yoff = xs - x_ind, ys - y_ind
+    
+    return xoff, yoff
 
 
-        #divide up bbox with has range 0-95 to 0-95/scale_factor (so 6x6 for scale factor of 16)
-        bb_scaled = bbox_coords / scale_factor
+
+def get_parametrized_wh(w,h,scale_factor):
+    ws , hs = w / scale_factor, h/ scale_factor
+    wp, hp = np.log2(ws), np.log2(hs)
+    return wp, hp
+    
 
 
-        #each coordinate goes at index i,j in the 6x6 array, where i,j are the coordinates of the
-        #lower left corner of the grid that center of the box (in 6x6 space ) falls on
-        #subtract eps so we dont't have one off error
-        eps = np.finfo(float).eps
-        inds = np.floor(bb_scaled[:,:,:2]-10*eps).astype('int')
 
-        #xywh where x and y are offset from lower left corner of grid thay are in [0,1] and w and h
-        # are what fraction the width and height of bboxes are of the total width and total height of the image
-        xywh = np.copy(bb_scaled)
-
-        #subtract the floored values to get the offset from the grid cell
-        xywh[:,:,:2] -= inds[:,:,:2].astype('float')
+def convert_class_to_one_hot(class_num, num_classes):
+    vec = num_classes * [0]
+    vec[class_num - 1] = 1
+    return vec
 
 
-        #divide by scaled width and height to get wdith and height relative to width and height of box
-        xywh[:,:,2] = np.log2(bbox_coords[:,:,2] / scale_factor)
-        xywh[:,:,3] = np.log2(bbox_coords[:,:,3] / scale_factor)
+
+def get_box_vector(coords, scale_factor, num_classes):
+    x,y,w,h,cls = coords
+    xind, yind = get_xy_inds(x,y,scale_factor)
+    xoff, yoff = get_xy_offsets(x, y, xind, yind, scale_factor)
+    wp, hp = get_parametrized_wh(w, h, scale_factor)
+    class_1hot_vec = convert_class_to_one_hot(cls, num_classes=num_classes)
+    objectness = [1, 0]
+    box_loc = [xoff, yoff, wp, hp]
+    box_vec = np.asarray(box_loc + objectness + class_1hot_vec)
+    return box_vec
 
 
-        #make gr_truth which is 
 
-        gr_truth = np.zeros((bbox_coords.shape[0],last_dim, x_len, y_len ))
-    #     else:
-    #         gr_truth = np.zeros((bbox_coords.shape[0], x_len,y_len,last_dim))
-
-
-        #sickens me to a do a for loop here, but numpy ain't cooperating
-        # I tried gr_truth[np.arange(gr_truth.shape[0]),inds[:0], inds[:1]][:,4] = xywh
-        #but it did not work
-
-        # we assume one box per image here
-        # for each grid point that is center of image plop in center, and width and height and class
-        for i in range(gr_truth.shape[0]):
-            #put coordinates, conf and class for all events (now there are multiple)
-            for j, coords in enumerate(xywh[i]):
+def make_default_no_object_1hot(gr_truth):
+    #make the 5th number 1, so the objectness by defualt is 0,1 -> denoting no object
+    gr_truth[:,:,:,5] = 1.
+    return gr_truth
 
 
-                # the index into the groudn truth grid where class should go
-                xind, yind = inds[i,j,0], inds[i,j,1]
-                gr_truth[i, :4, xind,yind,] = coords
 
-                #put in confidence
-                gr_truth[i,4,xind,yind] = 1 if bbox_classes[i,j] > 0. else 0.
-                gr_truth[i,5,xind,yind] = 1 if gr_truth[i,4,xind,yind] == 0. else 0.
-                #put in class label
-                gr_truth[i, 5 + int(bbox_classes[i,j]),xind,yind] = 1. if bbox_classes[i,j] > 0. else 0.
+def create_yolo_gr_truth(bbox_list, kwargs, caffe_format=False):
+        scale_factor, xlen, ylen, last_dim, num_classes = get_gr_truth_configs(kwargs)
+        
+        num_time_steps = len(bbox_list)
+        
+        gr_truth = np.zeros(( num_time_steps, xlen, ylen, last_dim ))
+        gr_truth = make_default_no_object_1hot(gr_truth)
+        
+        
+        
+        
+        for time_step in range(num_time_steps):
+            for coords in bbox_list[time_step]:
+                x,y,w,h,cls = coords
 
+                xind, yind = get_xy_inds(x,y,scale_factor)
+                box_vec = get_box_vector(coords, scale_factor, num_classes)
+                gr_truth[time_step,xind,yind,:] = box_vec
+
+        if caffe_format:
+            gr_truth = np.transpose(gr_truth, axes=(0,3,1,2))
         return gr_truth
 
 
 
-
-
-
-
 def test_grid(bbox, grid, xdim, ydim, scale_factor,num_classes, caffe_format=False):
+    scale_factor = float(scale_factor)
     cls = int(bbox[4])
     x,y = bbox[0] / scale_factor, bbox[1] / scale_factor
-    xo,yo = (bbox[0] % scale_factor) / float(scale_factor), (bbox[1] % scale_factor) / float(scale_factor)
-    w,h = bbox[2] / scale_factor / (xdim / scale_factor), bbox[3] / scale_factor/ (ydim / scale_factor)
-    
-    depth = 5 + num_classes
+
+    xo,yo = x - np.floor(x), y - np.floor(y)
+    w,h = np.log2(bbox[2] / scale_factor), np.log2(bbox[3] / scale_factor)
+
+
+    depth = 6 + num_classes
     if caffe_format:
         l_box = grid[:depth,x,y]
     else:
         l_box = grid[int(x),int(y),:depth]
+
     lbl = num_classes*[0]
     lbl[cls-1] = 1
     
-    real_box = [xo,yo,w,h,1.]
+    real_box = [xo,yo,w,h,1.,0.]
     real_box.extend(lbl)
     
     print l_box
     print real_box
     assert np.allclose(l_box, real_box), "Tests Failed"
+
+
+
+if __name__ == "__main__":
+    kwargs = {  "metadata_dir": "/home/evan/data/climate/labels/",
+                "scale_factor": 64, 
+                "xdim":768,
+                "ydim":1152,
+                "time_steps_per_file": 8,
+                "num_classes": 4, }
+
+    camfile_name = "/home/evan/data/climate/input/cam5_1_amip_run2.cam2.h2.1979-01-05-00000.nc"
+    labels_csv_file = "/home/evan/data/climate/labels/labels.csv"
+    ym = make_yolo_masks_for_dataset(camfile_name,
+                                     kwargs,
+                                    labels_csv_file)
+    box_list = make_labels_for_dataset(camfile_name, labels_csv_file)
+    box = box_list[0][0]
+    box_vec = get_box_vector(box, scale_factor=64., num_classes=4)
+    test_grid(box, ym[0], kwargs["xdim"], kwargs["ydim"], kwargs["scale_factor"], kwargs["num_classes"])
 

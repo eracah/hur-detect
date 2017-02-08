@@ -13,14 +13,12 @@ import numpy as np
 import imp
 import itertools
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
 import os
 import sys
 import time
 import inspect
 import copy
-from util import get_camfiles, normalize,convert_nc_data_to_tensor
+from util import get_camfiles, normalize,convert_nc_data_to_tensor, index_dict, vstack_dicts, dict_element_len
 from ground_truth_maker import make_yolo_masks_for_dataset
 
 
@@ -37,15 +35,18 @@ class BBoxIterator(object):
         self.data_chunk=[]
         self.num_events = len(self.camfiles) * 4
         self.events_open = 4 * self.kwargs["max_files_open"]
+        if kwargs["im_dim"] == 3:
+            assert kwargs["max_files_open"] >= kwargs['3d_time_steps_per_example'] /  (kwargs["time_steps_per_file"] / 
+                                            kwargs["time_step_sample_frequency"]),"increase max_files open!"
        
     
     def iterate_chunks(self,batch_size=128):
         chunk_index = 0
         events_read =0 
-        data_chunk = self.get_next_chunk()
+        chunk = self.get_next_chunk()
         while events_read < self.num_events:
-            if chunk_index + batch_size > len(data_chunk):
-                data_chunk = self.finish_out_chunk_and_get_as_many_more_as_needed(data_chunk, 
+            if chunk_index + batch_size > dict_element_len(chunk):
+                chunk = self.finish_out_chunk_and_get_as_many_more_as_needed(chunk, 
                                                                                   chunk_index, 
                                                                                   batch_size)
                 #back to 0 b/c we have a brand new chunk
@@ -64,20 +65,24 @@ class BBoxIterator(object):
             chunk_index += batch_size
             events_read += batch_size
             
-            yield data_chunk[excerpt]
+            ch = index_dict(chunk, excerpt)
             
-     
-    def finish_out_chunk_and_get_as_many_more_as_needed(self,data_chunk,ix, batch_size):
-        tmp = data_chunk[ix:]
-        data_chunk = self.get_chunks_until_at_capacity(batch_size - tmp.shape[0])
-        data_chunk = np.vstack((tmp,data_chunk))
-        return data_chunk
+            yield ch
+            
+    
+    
+    def finish_out_chunk_and_get_as_many_more_as_needed(self, chunk, ix, batch_size):
+        chunk_len = dict_element_len(chunk)
+        tmp = index_dict(chunk, slice(ix, chunk_len ))
+        chunk = self.get_chunks_until_at_capacity(batch_size - dict_element_len(tmp))
+        chunk = vstack_dicts(tmp,chunk)
+        return chunk
         
     def get_chunks_until_at_capacity(self,batch_size):
         tmp = self.get_next_chunk()
-        while tmp.shape[0] < batch_size:
-            data_chunk = self.get_next_chunk()
-            tmp = np.vstack((tmp,data_chunk))
+        while  dict_element_len(tmp) < batch_size:
+            chunk = self.get_next_chunk()
+            tmp = vstack_dicts(tmp,chunk)
         return tmp
 
     def get_next_chunk(self):
@@ -85,7 +90,7 @@ class BBoxIterator(object):
         
         #if we are starting back up again shuffle everything
         if self.file_ind < mfo:
-            if self.kwargs["shuffle"]:
+            if self.kwargs["shuffle"] and not self.kwargs["3D"]:
                 self.camfiles = self.camfiles.shuffle()
         
         #get next chunk of files
@@ -101,8 +106,28 @@ class BBoxIterator(object):
         
         data_chunk = self.grab_data_chunk(filenames)
         
-        #self.label_chunk = self.grab_label_chunk(filenames)
-        return data_chunk
+        label_chunk = self.grab_label_chunk(filenames)
+        return {"data":data_chunk, "label": label_chunk}
+    
+    def grab_label_chunk(self,filenames):
+        
+        labels = make_yolo_masks_for_dataset(filenames[0],self.kwargs)
+        if len(filenames) > 1:
+            for f in filenames[1:]:
+                label = make_yolo_masks_for_dataset(f,self.kwargs)
+                labels = np.vstack((labels, label))
+                
+        if self.kwargs["im_dim"] == 3:
+            time_steps = labels.shape[0]
+            time_steps_per_example = self.kwargs["3d_time_steps_per_example"]
+            labels = labels.reshape(time_steps / time_steps_per_example, 
+                                       time_steps_per_example, 
+                                       labels.shape[-3], 
+                                       labels.shape[-2], 
+                                       labels.shape[-1] )
+            
+            
+        return labels
         
     
     def grab_data_chunk(self, filenames):
@@ -117,7 +142,6 @@ class BBoxIterator(object):
         tensor = convert_nc_data_to_tensor(dataset,self.kwargs)
  
         return tensor
-        #if 3D -> convert to 3D
 
 
 
@@ -125,12 +149,19 @@ if __name__ == "__main__":
     sys.path.insert(0,"/home/evan/hur-detect/scripts/")
     from configs import *
     kwargs = process_kwargs()
-    kwargs["max_files_open"] = 1
-    kwargs['num_val_days'] = 3
+    kwargs["max_files_open"] = 4
+    kwargs['num_val_days'] = 10
     t = time.time()
-    for x in BBoxIterator(kwargs,mode="val").iterate_chunks(batch_size=5):
-        print x.shape
+    for x in BBoxIterator(kwargs,mode="val").iterate_chunks(batch_size=1):
+        print x['data'].shape, x['label'].shape
     print time.time() - t
+
+
+
+# from matplotlib import pyplot as plt
+# %matplotlib inline
+
+# plt.imshow(x["data"][0][1])
 
 
 

@@ -7,6 +7,7 @@ import lasagne
 from lasagne.layers import *
 from lasagne.nonlinearities import *
 from lasagne.objectives import *
+from lasagne.init import HeNormal
 import theano
 from theano import tensor as T
 import sys
@@ -14,8 +15,6 @@ import numpy as np
 from copy import deepcopy
 #enable importing of notebooks
 import inspect
-from lasagne.nonlinearities import *
-from lasagne.objectives import *
 import os
 
 if "THEANO_FLAGS" in os.environ and "gpu" in os.environ["THEANO_FLAGS"]:
@@ -24,10 +23,6 @@ from helper_fxns import get_detec_loss, softmax3D, softmax4D, AccuracyGetter
 import copy
 #if __name__ == "__main__":
     #from data_loader import load_classification_dataset, load_detection_dataset
-
-
-
-from lasagne.layers import dnn
 
 
 
@@ -64,7 +59,7 @@ def build_network(kwargs):
                       load: whether to load weights or not
                       load_path: path for loading weights'''
 
-    if kwargs["3D"]:
+    if kwargs["im_dim"] == 3:
         input_var = T.tensor5('input_var') 
     else:
         input_var = T.tensor4('input_var')
@@ -107,7 +102,7 @@ def build_layers(input_var, nk):
         num_filters = int(nk["filters_scale"] * filters_list[i])
 
         
-        if nk["3D"]:
+        if nk["im_dim"] == 3:
             conv = dnn.Conv3DDNNLayer(conv, num_filters=num_filters, filter_size=(3,5,5),pad=(1,2,2), stride=(1,2,2)) 
         else:
             #print nk["filters_scale"]
@@ -117,8 +112,8 @@ def build_layers(input_var, nk):
                                   filter_size=nk['filter_dim'], 
                                   pad=nk['filter_dim'] / 2, 
                                   stride=2,
-                                  W=nk['w_init'], 
-                                  nonlinearity=nk['nonlinearity'])
+                                  W=HeNormal(),
+                                  nonlinearity=LeakyRectify(0.1))
 
         
 
@@ -129,7 +124,7 @@ def build_layers(input_var, nk):
     if nk["yolo_batch_norm"]:
         encoder = BatchNormLayer(encoder)
     
-    if nk["3D"]:
+    if nk["im_dim"] == 3:
             #encoder = FeaturePoolLayer(encoder, pool_size=640, axis=1)
             box_conf = dnn.Conv3DDNNLayer(encoder, num_filters=2, filter_size=(3,3,3), 
                                           stride=(2,1,1), pad=(1,1,1), nonlinearity=softmax4D)
