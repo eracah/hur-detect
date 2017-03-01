@@ -26,7 +26,7 @@ model_name = configs["model"]
 
 # In[4]:
 
-model_module = importlib.import_module("models." + model_name)
+model_module = importlib.import_module("notebooks.models." + model_name)
 
 
 # In[5]:
@@ -45,7 +45,7 @@ def get_model():
     return model
 
 
-# In[8]:
+# In[9]:
 
 #! jupyter nbconvert __init__.ipynb --to script
 
