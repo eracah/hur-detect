@@ -31,6 +31,10 @@ model = Model(model_params["input"], output = model_params["output"], name=model
 
 
 def get_model():
+    if "semisupervised" in model_name:
+        model.mode = "semi_supervised"
+    else:
+        model.mode = "supervised"
     return model
 
 

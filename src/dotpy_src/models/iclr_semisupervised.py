@@ -26,7 +26,7 @@ from iclr_supervised import encoder, bbox
 
 encoder_num_filters_list = configs["num_filter_list"]
 num_layers = len(encoder_num_filters_list)
-inp_shape = configs["input_shape"]
+inp_shape = configs["tensor_input_shape"]
 
 
 
