@@ -74,7 +74,7 @@ def _parse_cla():
             if type(v) is list:
                 parser.add_argument('--' + k, type=type(v[0]),nargs='+', default=v, help=k)
             elif type(v) is bool:
-                parser.add_argument('--' + k, action='store_true', help=k)
+                parser.add_argument('--' + k, action='store_true',default=v,help=k)
             else:   
                 parser.add_argument('--' + k, type=type(v), default=v, help=k)
 
