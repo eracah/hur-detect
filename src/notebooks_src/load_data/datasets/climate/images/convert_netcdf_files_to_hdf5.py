@@ -16,7 +16,8 @@ sys.meta_path.append(NotebookFinder())
 import pandas as pd
 import re
 
-from util import *
+from util import get_camfiles, convert_nc_data_to_tensor, convert_list_box_lists_to_np_array, get_boxes_for_nc_file
+import time
 
 
 # In[2]:
@@ -26,76 +27,100 @@ variables=['PRECT','PS','PSL','QREFHT','T200','T500','TMQ','TREFHT',
 
 
 
-# In[33]:
-
-def convert_nc_to_h5(year=1980, base_path="/home/evan/data/climate/climo/images/", dest_path="/home/evan/data/climate/",num_ims=-1, prefix=""):
-    h5f = h5py.File(join(dest_path,prefix+"climo_" + str(year) + ".h5"), "w")
-    
-    ims_per_file = 8
-    time_step_sample_freq=2
-    ims_per_file /= time_step_sample_freq
-    max_rows = 15
-    box_dim =5 #4 coords plus class
+ims_per_file = 8
+time_step_sample_freq=2
+max_rows = 15
+box_dim =5 #4 coords plus class
+ims_per_file /= time_step_sample_freq
 
 
-    camfiles = get_camfiles(base_path,[year], with_dir=True )
-    camfiles.sort()
-    if num_ims != -1:
-        num_camfiles = int(np.ceil(float(num_ims) / ims_per_file))
-        camfiles = camfiles[:num_camfiles]
-    
+# In[3]:
+
+def get_h5f(prefix, years, dest_path):
+    h5filename = prefix+"climo_" + "_".join([str(y) for y in years]) + ".h5"
+    h5filepath = join(dest_path, h5filename)
+    h5f = h5py.File(h5filepath, "w")
+    return h5f
+
+
+# In[4]:
+
+def get_ds(h5f, camfiles, num_ims):
     all_ims = nc.MFDataset(camfiles)
-                    
     num_ex = all_ims[variables[0]].shape[0] / time_step_sample_freq if num_ims == -1 else num_ims
     xdim, ydim = all_ims[variables[0]].shape[1], all_ims[variables[0]].shape[2]
 
-
+    all_ims.close()
     im_ds = h5f.create_dataset(name="images",shape=(num_ex,len(variables), xdim, ydim), dtype="f4",compression="gzip" )
     box_ds = h5f.create_dataset(name="boxes", shape=(num_ex,max_rows,box_dim ), dtype="i4",compression="gzip")
+    
 
+    return im_ds, box_ds
+
+    
+
+
+# In[5]:
+
+def get_im_box_arrays(camfile):
+    ncd = nc.MFDataset(camfile)
+    im_arr = convert_nc_data_to_tensor(ncd,variables=variables,is_label=False, 
+                                         time_step_sample_freq=time_step_sample_freq, time_steps_per_example=1)
+    box_list_arr = convert_list_box_lists_to_np_array(get_boxes_for_nc_file(camfile), boxdim=5)
+    return  im_arr, box_list_arr
+
+
+# In[6]:
+
+def copy_arrays_to_hdf5(im_arr, box_list_arr, add_to_ds, ind, num_ex):
+    if ind + ims_per_file <= num_ex:
+        add_to_ds(im_arr, box_list_arr, slice(ind, ind+ims_per_file))
+    else:
+        rest = num_ex - ind
+        add_to_ds(im_arr[:rest], box_list_arr[:rest], slice(ind, num_ex))
+    
+
+
+# In[7]:
+
+def get_ds_func(im_ds, box_ds):
+    def add_to_ds(im_arr, box_arr, slice_):
+        im_ds[slice_] = im_arr
+        box_ds[slice_] = box_arr
+        print slice_.start, slice_.stop, im_arr.shape, box_arr.shape
+    return add_to_ds
+
+
+# In[10]:
+
+def convert_nc_to_h5(years=[1980], base_path="/home/evan/data/climate/climo/images/", dest_path="/home/evan/data/climate/",num_ims=-1, prefix=""):
+    h5f = get_h5f(prefix, years, dest_path)
+    
+    camfiles = get_camfiles(data_dir=base_path, with_dir=True,years=years, ims_per_file=ims_per_file, num_ims=num_ims)
+    im_ds, box_ds = get_ds(h5f, camfiles, num_ims)
+
+    add_to_ds = get_ds_func(im_ds, box_ds)
+    
+    num_ex = im_ds.shape[0]
+    
     ind = 0
-    for cfile in camfiles:
+    for camfile in camfiles:
         if ind >= num_ex:
             break
-        ncd = nc.MFDataset(cfile)
-        np_array = convert_nc_data_to_tensor(ncd,variables=variables,is_label=False,time_step_sample_freq=time_step_sample_freq,time_steps_per_example=1)
-        
-        box_list_arr = convert_list_box_lists_to_np_array(get_boxes_for_nc_file(cfile))
-        if ind + ims_per_file <= num_ex:
-            im_ds[ind:ind+ims_per_file] = np_array
-            box_ds[ind:ind+ims_per_file] = box_list_arr
-            
-            print ind, ind+ims_per_file, np_array.shape, box_list_arr.shape
         else:
-            rest = num_ex - ind
-            im_ds[ind:num_ex] = np_array[:rest]
-            box_ds[ind:num_ex] = box_list_arr[:rest]
-            print ind, num_ex, np_array[:rest].shape, box_list_arr[:rest].shape
-            
-        
-        
+            im_arr, box_list_arr = get_im_box_arrays(camfile)
+            copy_arrays_to_hdf5(im_arr, box_list_arr, add_to_ds, ind, num_ex)
+
         ind += ims_per_file
 
 
-# In[34]:
+# In[11]:
 
 if __name__ == "__main__":
     convert_nc_to_h5()
-    #h5f = h5py.File("/home/evan/data/climate/climo_1980.h5")
-
-    # from matplotlib import pyplot as plt
-    # %matplotlib inline
-
-    # im = h5f["images"][280][6]
-    # print im
-    # plt.imshow(im,origin="lower")
-
-    # im = h5f["images"][10][6]
-
-    # plt.imshow(im,origin="lower")
 
 
-# In[40]:
+# In[10]:
 
 #! jupyter nbconvert convert_netcdf_files_to_hdf5.ipynb --to script
 
