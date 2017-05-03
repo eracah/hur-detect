@@ -43,7 +43,7 @@ def normalize(arr,min_=None, max_=None, axis=(0,2,3)):
 
 
 
-def get_camfiles(data_dir, years, with_dir=False):
+def get_camfiles(data_dir, years, ims_per_file=8, num_ims=-1, with_dir=False):
     lsdir=os.listdir(data_dir)
     rpfile = re.compile(r"^cam5_.*\.nc$")
     camfiles = [f for f in lsdir if rpfile.match(f)]
@@ -51,6 +51,10 @@ def get_camfiles(data_dir, years, with_dir=False):
     camfiles.sort()
     if with_dir:
         camfiles = [join(data_dir, camfile) for camfile in camfiles]
+    if num_ims != -1:
+        num_camfiles = int(np.ceil(float(num_ims) / ims_per_file))
+        camfiles = camfiles[:num_camfiles]
+    print len(camfiles)
     return camfiles
 
 
@@ -139,14 +143,9 @@ def get_boxes_for_nc_file(filepath,
     return boxes
 
 
-def convert_list_box_lists_to_np_array(list_of_box_lists, max_rows=15):
+def convert_list_box_lists_to_np_array(list_of_box_lists, boxdim=5, max_rows=15):
     num_ex = len(list_of_box_lists)
-    
-    #the first box of the first list
-    sample_item = list_of_box_lists[0][0]
-    
-
-    arr = -1*np.ones((num_ex,max_rows, len(sample_item)))
+    arr = -1*np.ones((num_ex,max_rows, boxdim))
     for box_list_ind,box_list in enumerate(list_of_box_lists):
         num_used_rows = len(box_list)
         if len(box_list) > 0:
@@ -167,4 +166,8 @@ def convert_nc_data_to_tensor(dataset,variables, is_label,
         
         tensor = interleave_variables(labelled_vars,time_steps_per_example, label=is_label)
         return tensor
+
+
+
+
 

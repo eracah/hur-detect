@@ -10,14 +10,16 @@ import importlib
 
 def get_loss(model_name):
     loss_name = model_name
-    try:
-        loss_module = importlib.import_module("dotpy_src.losses." + loss_name)
-        loss, loss_weights = loss_module.loss, loss_module.loss_weights
-        return loss, loss_weights
-    except:
-        print loss_name
-        loss, loss_weights = get_case_by_case_loss(loss_name)
-        return loss, loss_weights
+
+    loss_module = importlib.import_module("dotpy_src.losses." + loss_name + "." + loss_name)
+    loss, loss_weights = loss_module.compute_loss, loss_module.loss_weights
+    return loss, loss_weights
+
+            
+        
+#         print loss_name
+#         loss, loss_weights = get_case_by_case_loss(loss_name)
+#         return loss, loss_weights
         
   
         

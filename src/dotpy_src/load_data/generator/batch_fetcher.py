@@ -110,10 +110,5 @@ class BatchFetcher(object):
 
 
 
-if __name__ == "__main__":
-    dataset = make_dataset("tr", 48)
-
-
-
 
 

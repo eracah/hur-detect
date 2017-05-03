@@ -12,6 +12,9 @@ from util import get_files_from_list, get_files_from_dir
 # from dotpy_src.load_data.configs import configs as configs
 #from images.netcdf_data_structure import ClimateNC
 import h5py
+if __name__ == "__main__":
+    sys.path.append("../../../../")
+#from dotpy_src.load_data..box_processing.coord_conversion import convert_min_max_to_wh_boxes
 
 
 
@@ -26,7 +29,7 @@ def get_data(type_, data_file, file_format="h5"):
 def _get_data_h5(type_, data_file):
     h5f = h5py.File(data_file)
     images = h5f["images"]
-    labels = convert_box_tensor_to_box_lists(h5f["boxes"])
+    labels = h5f["boxes"]
     return images, labels
 
     
@@ -56,8 +59,4 @@ if __name__ == "__main__":
     test= np.expand_dims(test,axis=0)
     ntest = np.concatenate((test,test,test))
     print convert_box_tensor_to_box_lists(ntest)
-
-
-
-
 

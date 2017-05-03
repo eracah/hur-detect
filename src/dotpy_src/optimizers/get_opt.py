@@ -1,7 +1,19 @@
 
 
 
-from keras.optimizers import adam,SGD
+#from keras.optimizers import adam,SGD
+
+
+
+import tensorflow as tf
+
+
+
+adam = tf.train.AdamOptimizer
+
+
+
+SGD = tf.train.MomentumOptimizer
 
 
 

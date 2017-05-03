@@ -2,10 +2,8 @@
 
 
 import sys
-
-
-
-import configs
+if __name__ == "__main__":
+    sys.path.append("../../")
 
 
 
@@ -30,7 +28,7 @@ model_params = model_module.get_model_params()
 
 
 
-model = Model(model_params["input"], output = model_params["output"], name=model_name)
+model = Model(inputs=model_params["inputs"], outputs = model_params["outputs"], name=model_name)
 
 
 
