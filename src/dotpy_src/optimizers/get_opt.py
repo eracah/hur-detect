@@ -21,7 +21,7 @@ import sys
 
 
 
-from configs import configs as cfg
+from dotpy_src.configs import configs as cfg
 
 
 

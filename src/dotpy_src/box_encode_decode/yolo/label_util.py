@@ -8,7 +8,7 @@ from os.path import join
 if __name__ == "__main__":
     sys.path.append("../../../../")
     
-from dotpy_src.load_data.configs import configs
+from dotpy_src.configs import configs
 
 
 

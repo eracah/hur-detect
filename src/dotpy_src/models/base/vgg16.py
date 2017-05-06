@@ -12,9 +12,7 @@ from keras.layers import Conv2D, BatchNormalization, Activation, MaxPooling2D,Fl
 
 if __name__ == "__main__":
     sys.path.append("../../../") 
-from dotpy_src.models.configs import configs
-from dotpy_src.load_data.configs import configs as data_configs
-configs.update(data_configs)
+from dotpy_src.configs import configs
 
 #WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg16_weights_tf_dim_ordering_tf_kernels.h5'
 WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5'

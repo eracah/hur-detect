@@ -14,7 +14,7 @@ import importlib
 
 if __name__ == "__main__":
     sys.path.append("../../../")
-from dotpy_src.models.configs import configs
+from dotpy_src.configs import configs
 from dotpy_src.models.util import make_model_data_struct
 from dotpy_src.models.base.get_base_model import get_base_model_layers                                  
 

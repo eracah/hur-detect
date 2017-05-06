@@ -17,7 +17,7 @@ import sys
 
 
 
-from configs import configs
+from dotpy_src.configs import configs
 
 
 

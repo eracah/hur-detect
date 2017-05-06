@@ -3,13 +3,12 @@
 
 import sys
 import os
-from configs import configs
 import importlib
 from generator.generator import GenThreadSafe, SemisupWrapper
 from generator.batch_fetcher import BatchFetcher
 if __name__ == "__main__":
     sys.path.append("../../")
-from configs import configs
+from dotpy_src.configs import configs
 #label_maker_module = importlib.import_module("dotpy_src.preprocessing.label_generation." + configs["label_maker_name"] + ".make_labels")
 
 

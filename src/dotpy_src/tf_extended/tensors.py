@@ -1,3 +1,6 @@
+
+
+
 # Copyright 2017 Paul Balanca. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -93,3 +96,4 @@ def pad_axis(x, offset, size, axis=0, name=None):
 #     val = tf.expand_dims(val, 0)
 #     t = t + tf.scatter_nd(idx, val, tf.shape(t))
 #     return t
+

@@ -13,7 +13,7 @@ from keras.layers import Input, Conv2D
 if __name__ == "__main__":
     sys.path.append("../../../")
 from dotpy_src.models.util import make_model_data_struct   
-from dotpy_src.models.configs import configs
+from dotpy_src.configs import configs
 
 from keras.regularizers import l2
 

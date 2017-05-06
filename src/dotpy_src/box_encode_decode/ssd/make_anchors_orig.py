@@ -28,8 +28,8 @@ import tensorflow as tf
 if __name__ == "__main__":
     sys.path.append("../../../")
 
-import dotpy_src.tf_extended as tfe
-from dotpy_src.box_encode_decode.configs import configs
+#import dotpy_src.tf_extended as tfe
+from dotpy_src.configs import configs
 
 
 
@@ -46,7 +46,7 @@ def make_anchors_for_one_fmap(img_shape, feat_shape, dtype=np.float32):
 
 
 # ======================================================================= #
-def make_anchors(img_shape, dtype=np.float32):
+def make_anchors(img_shape=configs["input_shape"][-2:], dtype=np.float32):
     """Compute the default anchor boxes, given an image shape.
     """
     return ssd_anchors_all_layers(img_shape,
@@ -133,12 +133,4 @@ def ssd_anchor_one_layer(img_shape,
         h[i+di] = sizes[0] / img_shape[0] / math.sqrt(r)
         w[i+di] = sizes[0] / img_shape[1] * math.sqrt(r)
     return y, x, h, w
-
-
-
-
-
-
-
-
 

@@ -3,8 +3,7 @@
 
 import sys
 import os 
-if os.path.basename(os.getcwd()) == "src":
-    from dotpy_src.config_util import update_configs
+
 import numpy as np
 
 
@@ -43,9 +42,6 @@ label_configs = dict(
 configs = {}
 for kwargs in kwargs_dict.values():
     configs.update(kwargs)
-
-if os.path.basename(os.getcwd()) == "src":
-    configs = update_configs(configs)
 
 
 

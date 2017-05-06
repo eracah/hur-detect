@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
 
 
-from configs import configs
+from dotpy_src.configs import configs
 import importlib
 
 

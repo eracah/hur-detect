@@ -9,7 +9,7 @@ from keras.models import Model
 from keras.layers import Input, Conv2D,Deconv2D
 if __name__ == "__main__":
     sys.path.append("../../../")
-from dotpy_src.models.configs import configs
+from dotpy_src.configs import configs
 
 
 from keras.regularizers import l2

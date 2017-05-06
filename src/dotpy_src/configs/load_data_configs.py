@@ -3,8 +3,7 @@
 
 import sys
 import os 
-if os.path.basename(os.getcwd()) == "src":
-    from dotpy_src.config_util import update_configs
+
 
 
 kwargs_dict = dict(data_format_args = {'raw_input_shape': (16,768,1152), "input_shape":(16,768,1152)},
@@ -15,9 +14,9 @@ kwargs_dict = dict(data_format_args = {'raw_input_shape': (16,768,1152), "input_
                 label_kwargs = {"scale_factor": 32, "one_hot_labels": False, "tf_format":True, "num_classes": 4,
                                 "label_maker_name": "yolo", "num_max_boxes":15},
 
-                tr_val_test_args = {'batch_size' : 1,
-                                    "num_tr_ims": -1,
-                                    "num_val_ims": 16,
+                tr_val_test_args = {'batch_size' : 2,
+                                    "num_tr_ims": 4,
+                                    "num_val_ims": 4,
                                     "num_test_ims": 32
                                    },
 
@@ -37,8 +36,6 @@ configs = {}
 for kwargs in kwargs_dict.values():
     configs.update(kwargs)
 
-if os.path.basename(os.getcwd()) == "src":
-    configs = update_configs(configs)
 
 
 

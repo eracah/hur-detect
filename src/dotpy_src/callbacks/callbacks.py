@@ -23,7 +23,7 @@ import matplotlib; matplotlib.use('agg'); import matplotlib.pyplot as plt
 
 
 import sys
-from configs import configs
+from dotpy_src.configs import configs
 
 
 

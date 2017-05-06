@@ -9,16 +9,15 @@ import keras
 
 from keras.models import Model
 from keras.regularizers import l2
-from keras.layers import Input, Conv2D,merge, GlobalAveragePooling2D, Dense, Reshape
+from keras.layers import Input, Conv2D,merge, GlobalAveragePooling2D, Dense, Reshape, Activation
 from keras.layers.merge import concatenate
 import importlib
 if __name__ == "__main__":
     sys.path.append("../../../")
-from dotpy_src.models.configs import configs
+from dotpy_src.configs import configs
 from dotpy_src.models.util import make_model_data_struct, Normalize
 from dotpy_src.models.base.get_base_model import get_base_model_layers  
-from dotpy_src.box_encode_decode.configs import configs as box_configs
-configs.update(box_configs)
+
 
 
 
@@ -95,7 +94,8 @@ def get_ssd_detection_outputs(layers):
     for ind, name in enumerate(layer_names_for_pred):
         fmap = layers[name]
         layers[name + "_xywh_output"], layers[name + "_cls_output"] = get_detections_for_fmap(name, fmap, num_anchors[ind])
-        layers[name + "_combined_output"] = concatenate([layers[name + "_xywh_output"], layers[name + "_cls_output"]],axis=3)
+        layers[name + "_combined_output"] = concatenate([layers[name + "_xywh_output"],
+                                                         layers[name + "_cls_output"]],axis=3)
 
         
 
@@ -119,6 +119,8 @@ def get_detections_for_fmap(name, fmap, num_anchors):
 
             #no softmax for now?
             cls_output = Conv2D(num_cls_outputs, (3, 3), activation="linear", **conv_kwargs)(fmap)
+            
+        
         
         return xywh_output, cls_output
         

@@ -1,3 +1,6 @@
+
+
+
 # Copyright 2017 Paul Balanca. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +30,7 @@ from tensorflow.python.ops import state_ops
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import variables
 
-import tfe_math
+from tf_extended import math as tfe_math
 
 
 # =========================================================================== #
@@ -391,4 +394,5 @@ def streaming_precision_recall_arrays(n_gbboxes, rclasses, rscores,
         if updates_collections:
             ops.add_to_collections(updates_collections, update_op)
         return r, update_op
+
 

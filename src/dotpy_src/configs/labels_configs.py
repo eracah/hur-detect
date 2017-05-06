@@ -3,7 +3,7 @@
 
 import sys
 
-from dotpy_src.config_util import update_configs
+
 label_format_args = {  'num_classes': 4,
                        'box_sizes':[(64,64)],
                        'scale_factor': 64,                    
@@ -23,8 +23,6 @@ configs = {}
 for kwargs in kwargs_list:
     configs.update(kwargs)
 
-
-configs = update_configs(configs)
 
 
 

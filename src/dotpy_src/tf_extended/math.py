@@ -1,3 +1,6 @@
+
+
+
 # Copyright 2017 Paul Balanca. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,3 +68,4 @@ def cummax(x, reverse=False, name=None):
         if reverse:
             cmax = tf.reverse(cmax, axis=[0])
         return cmax
+
