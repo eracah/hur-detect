@@ -25,7 +25,7 @@ configs = {}
 # In[4]:
 
 config_module_names = ["box_encode_decode_configs",
-                    "callbacks_configs",
+                    "tensorboard_configs",
                     "fit_configs",
                     "labels_configs",
                     "load_data_configs",
@@ -84,7 +84,7 @@ configs = _parse_cla(configs)
 configs["tensor_input_shape"] = convert_shape_to_tf(configs["input_shape"])
 
 
-# In[9]:
+# In[10]:
 
 #! jupyter nbconvert --to script __init__.ipynb
 
