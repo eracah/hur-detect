@@ -2,7 +2,6 @@
 
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 
 
@@ -16,6 +15,10 @@ import numpy as np
 from dotpy_src.models.get_model import get_model
 from dotpy_src.load_data.get_generator import get_generator
 from dotpy_src.fit.get_fit_function import get_fit_function
+
+
+
+os.environ["CUDA_VISIBLE_DEVICES"]=str(configs["gpu"])
 
 
 

@@ -1,28 +1,21 @@
 
-# coding: utf-8
 
-# In[1]:
 
 import sys
 if __name__ == "__main__":
     sys.path.append("../../")
-from notebooks_src.nbfinder import NotebookFinder
-sys.meta_path.append(NotebookFinder())
 from os.path import dirname
 import argparse
 
 
-# In[2]:
 
 import importlib
 
 
-# In[3]:
 
 configs = {}
 
 
-# In[4]:
 
 config_module_names = ["box_encode_decode_configs",
                     "tensorboard_configs",
@@ -35,16 +28,14 @@ config_module_names = ["box_encode_decode_configs",
                     "optimizers_configs"]
 
 
-# In[5]:
 
 for config_module_name in config_module_names:
     print config_module_name
-    config_module = importlib.import_module("notebooks_src.configs." + config_module_name)
+    config_module = importlib.import_module("dotpy_src.configs." + config_module_name)
     configs_dict = config_module.configs
     configs.update(configs_dict)
 
 
-# In[6]:
 
 def _parse_cla(configs):
     
@@ -66,7 +57,6 @@ def _parse_cla(configs):
     return configs
 
 
-# In[ ]:
 
 def convert_shape_to_tf(shape):
     #shape is 3 dimensions
@@ -74,22 +64,17 @@ def convert_shape_to_tf(shape):
     return new_shape
 
 
-# In[7]:
 
 configs = _parse_cla(configs)
 
 
-# In[ ]:
 
 configs["tensor_input_shape"] = convert_shape_to_tf(configs["input_shape"])
 
 
-# In[1]:
-
-#! jupyter nbconvert --to script __init__.ipynb
 
 
-# In[ ]:
+
 
 
 

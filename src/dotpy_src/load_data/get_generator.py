@@ -17,14 +17,14 @@ from dotpy_src.configs import configs
 
 
 
-def make_batch_fetcher(typ="tr", num_examples=-1,data_name="climate", data_path=configs["data_file"]):
+def make_batch_fetcher(typ="tr", num_examples=-1,data_name="climate"):
     data_module = importlib.import_module("dotpy_src.load_data.datasets." + data_name+".get_data")
-    ims, labels = data_module.get_data(type_=typ, data_file=data_path)
+    ims, labels = data_module.get_data(type_=typ)
     return BatchFetcher(ims,labels,num_examples=num_examples)
 
 
 
-def get_generator(typ, data_path=configs["data_file"],
+def get_generator(typ,
                   data_name=configs["data_name"], 
                   batch_size=None,num_ims=-1, 
                   mode="supervised" ):
@@ -32,7 +32,7 @@ def get_generator(typ, data_path=configs["data_file"],
 
     num_ims = configs["num_"+ typ+"_ims"]
     batch_fetcher = make_batch_fetcher(num_examples=num_ims,typ=typ,
-                                       data_name=data_name, data_path=data_path)
+                                       data_name=data_name)
     
     
     #all_labels = batch_fetcher.labels

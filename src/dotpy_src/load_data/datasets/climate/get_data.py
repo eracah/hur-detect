@@ -5,28 +5,26 @@ import sys
 import os
 import numpy as np
 import random
-# from configs import configs as climate_configs
 import collections
 from util import get_files_from_list, get_files_from_dir
-#put home on path
-# from dotpy_src.load_data.configs import configs as configs
-#from images.netcdf_data_structure import ClimateNC
 import h5py
 if __name__ == "__main__":
     sys.path.append("../../../../")
-#from dotpy_src.load_data..box_processing.coord_conversion import convert_min_max_to_wh_boxes
+from dotpy_src.configs import configs
 
 
 
-def get_data(type_, data_file, file_format="h5"):
+def get_data(type_,file_format="h5"):
     if file_format == "nc":
         raise NotImplementedError
     else:
-        return _get_data_h5(type_, data_file)
+        return _get_data_h5(type_)
 
 
 
-def _get_data_h5(type_, data_file):
+def _get_data_h5(type_):
+    data_file = configs[type_ + "_data_file"]
+    
     h5f = h5py.File(data_file)
     images = h5f["images"]
     labels = h5f["boxes"]
