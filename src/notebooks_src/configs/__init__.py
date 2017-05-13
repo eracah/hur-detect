@@ -30,8 +30,7 @@ config_module_names = ["box_encode_decode_configs",
 
 
 for config_module_name in config_module_names:
-    print config_module_name
-    config_module = importlib.import_module("dotpy_src.configs." + config_module_name)
+    config_module = importlib.import_module("notebooks_src.configs." + config_module_name)
     configs_dict = config_module.configs
     configs.update(configs_dict)
 
