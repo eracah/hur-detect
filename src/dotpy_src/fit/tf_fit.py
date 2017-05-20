@@ -7,7 +7,7 @@ import numpy as np
 from os.path import join
 if __name__ == "__main__":
     sys.path.append("../../")
-from dotpy_src.metrics.mAP import calc_batch_metrics, EpochMetrics, calc_ap_one_class
+#from dotpy_src.metrics.mAP import calc_batch_metrics, EpochMetrics, calc_ap_one_class
 from dotpy_src.configs import configs
 import time
 
@@ -23,9 +23,10 @@ def fit(model, generator, val_generator,num_epochs, loss_func, opt):
         y_true, y_preds = get_y_true_y_preds_tensors(model, generator.batch_size,generator.data.labels.shape[1:])
         
         
+        
+        #running_average_loss = tf.placeholder(dtype=tf.float32,shape=())
+        loss_tensor = loss_func(y_true, y_preds)
         with tf.name_scope("loss"):
-            #running_average_loss = tf.placeholder(dtype=tf.float32,shape=())
-            loss_tensor = loss_func(y_true, y_preds)
             tf.summary.scalar("loss", loss_tensor)
             #tf.summary.scalar("running_average_loss", running_average_loss)
             
@@ -53,7 +54,10 @@ def fit(model, generator, val_generator,num_epochs, loss_func, opt):
         sess.run(tf.global_variables_initializer())
         tr_global_step_counter = 0
         val_global_step_counter = 0
+        print "beginning training"
+        
         for epoch in range(num_epochs):
+            t0 = time.time()
             
             
             tr_global_step_counter =  run_loss_loop(type_="tr", epoch=epoch, steps_per_epoch=tr_steps_per_epoch, 
@@ -63,14 +67,19 @@ def fit(model, generator, val_generator,num_epochs, loss_func, opt):
                                                     input_=input_, y_true=y_true, global_step=tr_global_step_counter, sess=sess)
             
             
-            get_epoch_accuracy(generator, model, sess, input_,train_epoch_writer, epoch)
             
+            t1 = time.time()
+            epoch_time = t1-t0
+            print "epoch time: ", epoch_time
+            write_summary(epoch_time, "epoch_time", train_epoch_writer, epoch)
             val_global_step_counter = run_loss_loop(type_="val", epoch=epoch, steps_per_epoch=val_steps_per_epoch, 
                                                     step_writer=val_writer, epoch_writer=val_epoch_writer, generator=val_generator, 
                                                     train_step=None, loss_tensor=loss_tensor, summary_op=merged, 
                                                     input_=input_, y_true=y_true, global_step=val_global_step_counter,sess=sess)
             
-            get_epoch_accuracy(val_generator, model, sess, input_, val_epoch_writer, epoch)
+#             if epoch % 10 == 0:
+#                 get_epoch_accuracy(generator, model, sess, input_,train_epoch_writer, epoch)
+#                 get_epoch_accuracy(val_generator, model, sess, input_, val_epoch_writer, epoch)
             
   
             
@@ -105,13 +114,14 @@ def run_loss_loop(type_, epoch, steps_per_epoch, step_writer, epoch_writer, gene
 
         _, cur_loss, summary = sess.run(sess_list,feed_dict={input_:im, 
                                                             y_true:boxes})
+        print cur_loss
         loss_sum += cur_loss
 
 
         step_writer.add_summary(summary,global_step)
         global_step += 1
     average_loss = loss_sum / float(steps_per_epoch)
-    
+    print "at epoch %i, the loss for %s is %8.4f" %(epoch,type_, average_loss)
     write_summary(average_loss,"running_average_loss", epoch_writer, epoch)
     return global_step
 

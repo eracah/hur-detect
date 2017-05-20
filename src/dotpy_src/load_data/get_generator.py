@@ -4,16 +4,12 @@
 import sys
 import os
 import importlib
-from generator.generator import GenThreadSafe, SemisupWrapper
+from generator.generator import GenThreadSafe
 from generator.batch_fetcher import BatchFetcher
 if __name__ == "__main__":
     sys.path.append("../../")
 from dotpy_src.configs import configs
 #label_maker_module = importlib.import_module("dotpy_src.preprocessing.label_generation." + configs["label_maker_name"] + ".make_labels")
-
-
-
-#create_labelmaker_fxn = label_maker_module.create_labelmaker_fxn
 
 
 

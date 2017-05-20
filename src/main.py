@@ -2,10 +2,6 @@
 
 
 import os
-
-
-
-
 import sys
 from dotpy_src.configs import configs
 from keras.models import Model
@@ -28,11 +24,19 @@ model = get_model()
 
 opt = get_opt()
 
+
+
 loss_func, loss_weights = get_loss(model.name)
+
+
 
 generator = get_generator(mode=model.mode, typ="tr", )
 
+
+
 val_generator = get_generator(typ="val", mode=model.mode)
+
+
 
 num_epochs = configs["num_epochs"]
 
@@ -41,10 +45,6 @@ num_epochs = configs["num_epochs"]
 fit = get_fit_function()
 
 fit(model, generator, val_generator, num_epochs, loss_func, opt)
-
-
-
-
 
 
 

@@ -3,21 +3,29 @@
 
 import tensorflow as tf
 import sys
-from utils import convert_tf_shape_to_int_tuple
+
 if __name__ == "__main__":
     sys.path.append("../../")
+from dotpy_src.box_processing.tf_box_util import convert_tf_shape_to_int_tuple
 from dotpy_src.configs import configs
 
 
 
+def split_box_class(label_tensor):
+    bboxes, labels = tf.split(label_tensor, num_or_size_splits=[4,1], axis=2)
+    labels = tf.squeeze(labels,axis=2)
+    return bboxes, labels
+
+
+
 def unpack_net_output(y_preds):
-    locs,logs,preds = [], [], []
+    locs,logs,preds = {}, {}, {}
     for y_pred in y_preds:
         feat_shape = tuple([d.value for d in list(y_pred.get_shape()[1:3])])
         loc,log,pred = _unpack_net_output(y_pred, feat_shape)
-        locs.append(loc)
-        logs.append(log)
-        preds.append(pred)
+        locs[feat_shape] = loc
+        logs[feat_shape] = log
+        preds[feat_shape] = pred
     
     return locs,logs,preds
         
@@ -50,7 +58,7 @@ def _unpack_net_output(pred_tensor, feat_shape):
 def reshape_logits(logits, num_boxes, num_classes, cutoff_axis):
     """ logits (num_ex,ydim,xdim,cls_channels) we reshape each to be (num_ex, ydim,xdim,num_boxes, num_classes) """
     logits_shape = convert_tf_shape_to_int_tuple(logits.get_shape())
-    new_logits_shape = tuple(list(logits_shape[0:cutoff_axis]) + [num_boxes, num_classes])
+    new_logits_shape = tuple(list(logits_shape[0:cutoff_axis]) + [num_boxes, num_classes + 1])
     logits = tf.reshape(logits, shape=new_logits_shape)
     
     return logits
@@ -80,7 +88,7 @@ def get_channel_numbers(feat_shape, num_classes, num_coords_per_box):
     num_boxes = len(sizes)+ len(ratios)
 
     loc_channels = num_boxes * num_coords_per_box
-    cls_channels = num_classes * num_boxes
+    cls_channels = (num_classes + 1) * num_boxes
     
     return num_boxes, loc_channels, cls_channels
 

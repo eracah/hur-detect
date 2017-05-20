@@ -18,7 +18,3 @@ def get_fit_function():
     return fit_fxn
     
 
-
-
-
-

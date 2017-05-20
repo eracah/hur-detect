@@ -105,8 +105,9 @@ def get_ssd_detection_outputs(layers):
 
 def get_detections_for_fmap(name, fmap, num_anchors):
         num_classes = configs["num_classes"]
+        num_background = 1
         num_xywh_outputs = num_anchors * 4
-        num_cls_outputs = num_anchors * num_classes
+        num_cls_outputs = num_anchors * (num_classes + num_background)
         if "pool" in name:
             xywh_output = Dense(num_xywh_outputs)(fmap)
             xywh_output = Reshape(target_shape=(1,1, num_xywh_outputs))(xywh_output)
@@ -146,4 +147,12 @@ input_tensor = layers["input"]
 
 def get_model_params():
     return make_model_data_struct(inputs=input_tensor, outputs=outputs)
+
+
+
+outputs
+
+
+
+
 

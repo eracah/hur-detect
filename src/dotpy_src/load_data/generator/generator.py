@@ -8,7 +8,6 @@ import threading
 
 if __name__ == "__main__":
     sys.path.append("../../../")
-from dotpy_src.box_encode_decode.util import make_box_coords_relative
 
 
 
@@ -41,28 +40,5 @@ class GenThreadSafe(object):
             ims,lbls = self.data.next_batch(batch_size=self.batch_size)
             if self.tf_mode:
                 ims = np.transpose(ims,axes=(0,2,3,1))
-            
-            lbls = make_box_coords_relative(lbls, im_shape=ims.shape[1:3])
             return ims, lbls
-
-
-
-#thread safe
-class SemisupWrapper(object):
-    def __init__(self,generator):
-        self.generator = generator
-        self.lock = threading.Lock()
-        
-    def __iter__(self):
-        return self
-    
-    @property
-    def num_ims(self):
-        return self.generator.num_ims
-    
-    def next(self):
-        with self.lock:
-            ims, lbls = self.generator.next()
-            return ims, {"box_score":lbls,"reconstruction":ims}
-        
 
