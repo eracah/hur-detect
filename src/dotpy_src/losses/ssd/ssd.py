@@ -42,29 +42,28 @@ def compute_loss(y_true, y_preds):
 
     for fmap_size in encoded_boxes_dict.keys():
         x_mask, tp_mask, num_matches = mask_dict[fmap_size]
+        with tf.name_scope("loss_for_%i_%i" %(fmap_size[0], fmap_size[1])):
+            tf.summary.scalar(name="num_positives",tensor=num_matches)
 
-        tf.summary.scalar(name="num_positives_for_%i_%i"%(fmap_size[0],fmap_size[1]),tensor=num_matches)
+    #         with tf.name_scope("x_mask"):
+    #             batch_size = configs["batch_size"]
+    #             max_boxes = configs["num_max_boxes"]
+    #             num_anchors = 4
+    #             for anch in range(num_anchors):
+    #                 for gt_box in range(max_boxes):
 
-#         with tf.name_scope("x_mask"):
-#             batch_size = configs["batch_size"]
-#             max_boxes = configs["num_max_boxes"]
-#             num_anchors = 4
-#             for anch in range(num_anchors):
-#                 for gt_box in range(max_boxes):
+    #                     x_im = tf.cast(tf.expand_dims(x_mask[:,:,:,anch,gt_box], axis=-1), tf.float32)
+    #                     tf.summary.image("xmask_for_fmap_%i_%i_anchor_%i_gt_box_%i"%(fmap_size[0],fmap_size[1],anch,gt_box),
+    #                                      x_im)
 
-#                     x_im = tf.cast(tf.expand_dims(x_mask[:,:,:,anch,gt_box], axis=-1), tf.float32)
-#                     tf.summary.image("xmask_for_fmap_%i_%i_anchor_%i_gt_box_%i"%(fmap_size[0],fmap_size[1],anch,gt_box),
-#                                      x_im)
+            encoded_boxes, encoded_labels, loc, log, pred = [dic[fmap_size] for dic in [encoded_boxes_dict,
+                                                              encoded_labels_dict,
+                                                               loc_dict, log_dict, pred_dict ]]
 
-        encoded_boxes, encoded_labels, loc, log, pred = [dic[fmap_size] for dic in [encoded_boxes_dict,
-                                                          encoded_labels_dict,
-                                                           loc_dict, log_dict, pred_dict ]]
+            fmap_loss = calc_loss_one_layer(encoded_boxes, encoded_labels, x_mask, tp_mask,
+                                           num_matches,actual_gt_box_mask, loc, log, pred, fmap_size )
 
-
-        fmap_loss = calc_loss_one_layer(encoded_boxes, encoded_labels, x_mask, tp_mask,
-                                       num_matches,actual_gt_box_mask, loc, log, pred, fmap_size )
-
-        loss = loss + fmap_loss
+            loss = loss + fmap_loss
     return loss
         
         
@@ -72,9 +71,11 @@ def compute_loss(y_true, y_preds):
 
 
 def calc_loss_one_layer(encoded_boxes, encoded_labels, x_mask, tp_mask, num_matches,actual_gt_box_mask, loc, log, pred, fmap_size ):
+
     loc_loss = calc_loc_loss(x_mask, encoded_boxes, loc)
-    cls_loss = calc_cls_loss(x_mask, encoded_labels,log, pred,actual_gt_box_mask, tp_mask, num_matches, fmap_size )
-    return (loc_loss + cls_loss) * (1./ num_matches) * (1./ configs["batch_size"])
+    cls_loss = calc_cls_loss(x_mask, encoded_labels,log, pred,actual_gt_box_mask, tp_mask, num_matches, fmap_size ) 
+    match_coeff = tf.where(tf.equal(num_matches, 0), 0., tf.div(1., tf.cast(num_matches,dtype=tf.float32)))
+    return (loc_loss + cls_loss) * match_coeff * (1./ configs["batch_size"])
 
 def calc_loc_loss(x_mask, encoded_boxes, loc):
     num_coords_in_a_box = 4
@@ -91,24 +92,25 @@ def calc_loc_loss(x_mask, encoded_boxes, loc):
     return loc_loss
 
 def calc_cls_loss(x_mask, encoded_labels,log, pred,actual_gt_box_mask, tp_mask, num_matches, fmap_size ):
-    fmap_size
     log = tf.stack(configs["num_max_boxes"]*[log], axis=-2)
     xent_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=log, labels=encoded_labels)
     xent_loss = tf.boolean_mask(xent_loss, x_mask)
     pos_xent = tf.reduce_sum(xent_loss)
     
     fp_mask = make_fp_mask(actual_gt_box_mask, tp_mask)
-    num_negs = tf.cast(configs["negative_ratio"] * num_matches, dtype=tf.int32)
 
-    tf.summary.scalar(name="num_mined_negatives_for_%i_%i"%(fmap_size[0],fmap_size[1]),tensor=num_negs)
-        
+    num_negs = tf.cast(configs["negative_ratio"] * num_matches, dtype=tf.int32)
+    
+    default_negs = tf.constant( configs["default_negatives"],dtype=tf.int32)
+    num_negs = tf.where(tf.equal(num_negs,0),default_negs, num_negs)
+
+    tf.summary.scalar(name="num_mined_negatives",tensor=num_negs) 
     hard_neg_mask = make_hard_neg_mask(pred, fp_mask, num_negs, fmap_size)
     
     neg_encoded_labels = tf.where(hard_neg_mask, configs["num_classes"]*tf.ones_like(encoded_labels), encoded_labels)
     neg_xent_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=log, labels=neg_encoded_labels)
-    neg_xent_loss = tf.boolean_mask(neg_xent_loss, x_mask)
+    neg_xent_loss = tf.boolean_mask(neg_xent_loss, hard_neg_mask)
     neg_xent = tf.reduce_sum(neg_xent_loss)
-    
     with tf.name_scope("cls_losses"):
         tf.summary.scalar("pos_xent",pos_xent)
         tf.summary.scalar("neg_xent", neg_xent)
@@ -131,12 +133,14 @@ def make_hard_neg_mask(pred, fp_mask, num_negs, fmap_size):
     flat_bg_fp_pred = tf.reshape(bg_fp_pred, [-1])
     
     num_total_negs = flat_bg_fp_pred.get_shape()[0]
-    tf.summary.scalar(name="num_total_negatives_for_%i_%i"%(fmap_size[0],fmap_size[1]),tensor=num_total_negs)
+    tf.summary.scalar(name="num_total_negatives", tensor=num_total_negs)
+
     k = tf.where(num_negs > num_total_negs, num_total_negs, num_negs)
     bg_confs, inds = tf.nn.top_k(flat_bg_fp_pred,k=k)
     min_bg_conf = bg_confs[-1]
     hard_neg_mask = tf.greater_equal(bg_fp_pred, min_bg_conf)
     hard_neg_mask = tf.squeeze(hard_neg_mask, axis=-1)
+
     return hard_neg_mask
     
     
