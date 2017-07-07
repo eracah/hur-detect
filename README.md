@@ -4,7 +4,7 @@ Deep Semi-Supervised Object Detection for Extreme Weather Events
 
 ## Getting Most Stable Version
 
-Last fully functional commit: 553448aeeaf7bda4bec7d4ec78a9624991c1c4d
+Last fully functional commit: [553448aeeaf7bda4bec7d4ec78a9624991c1c4d](https://github.com/eracah/hur-detect/tree/5553448aeeaf7bda4bec7d4ec78a9624991c1c4d)
 
     git reset 553448aeeaf7bda4bec7d4ec78a9624991c1c4d
 ## Running Code
