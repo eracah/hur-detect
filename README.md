@@ -1,27 +1,27 @@
-#For most recent code see branch: keras-tf
+## For most recent code and readme see branch: "keras-tf"
 
-#Prerequisites:
+# Prerequisites:
 * lasagne
 * theano
 * scikit-learn
 * h5py
 
-#running the notebook:
+# running the notebook:
 * open up hur_main.ipynb
 * run it
 
-#Instructions for running from terminal:
+# Instructions for running from terminal:
 
 * `module load deeplearning` only needed if you are on Cori
 * `python hur_main.py`  and any below command line args
 
-#Instructions for running on NERSC's Cori batch system:
+# Instructions for running on NERSC's Cori batch system:
 
 * `sbatch hur_main.sl` and the below command line arguments
 
 
 
-#Command line args
+# Command line args
 
   --shuffle SHUFFLE     shuffle (default: False)
   
