@@ -1,3 +1,5 @@
+#For most recent code see branch: keras-tf
+
 #Prerequisites:
 * lasagne
 * theano
