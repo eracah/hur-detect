@@ -1,5 +1,10 @@
-## For most recent code and readme see branch: "keras-tf"
+## For most recent code and readme: 
+* see the [keras-tf branch](https://github.com/eracah/hur-detect/tree/keras-tf)
 
+
+# Most Stable Commit
+
+    git reset 3ddc6d47a9f4206214c4c57ccafe6f12cd46bfac
 # Prerequisites:
 * lasagne
 * theano
@@ -14,11 +19,6 @@
 
 * `module load deeplearning` only needed if you are on Cori
 * `python hur_main.py`  and any below command line args
-
-# Instructions for running on NERSC's Cori batch system:
-
-* `sbatch hur_main.sl` and the below command line arguments
-
 
 
 # Command line args
